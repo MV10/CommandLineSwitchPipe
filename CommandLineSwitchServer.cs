@@ -184,7 +184,7 @@ namespace CommandLineSwitchPipe
 
         private static void Output(LogLevel level, string message)
         {
-            if (Options.LogToConsole) 
+            if (Options.LogToConsole || level > LogLevel.Warning) 
                 Console.WriteLine(message);
 
             if (Options.Logger != null)
