@@ -1,4 +1,4 @@
-# CommandLineSwitchPipe
+# CommandLineSwitchPipe [![NuGet](https://img.shields.io/nuget/v/CommandLineSwitchPipe.svg)](https://nuget.org/packages/CommandLineSwitchPipe)
 
 This library uses named pipes to pass command-line switches and arguments to a running service (implemented as a .NET console program) by simply running another instance of the same program with the additional arguments on the command-line. The running instance can return a string value in response.
 
