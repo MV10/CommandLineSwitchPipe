@@ -14,17 +14,17 @@ The library serves as a communications conduit only. It does not actually handle
 
 The demo program should be relatively easy to follow, and the code is heavily commented, but the general steps are:
 
-* Call `TrySendArgs` to send the command-line to any already-running instance.
+* Call `TrySendArgs` to send the command-line to any already-running instance
 
 * If this succeeds, another instance was found and received the data:
   * Optionally read the `QueryResponse` property
   * Exit
 
 * If this fails, this instance can assume the role of the running service:
-  * Use `Task.Run` to invoke `StartServer` on a separate thread.
-  * Process any arguments that were passed this instance.
-  * Do whatever work the application should normally perform.
-  * When the application should exit, cancel the token provided to `StartServer`.
+  * Use `Task.Run` to invoke `StartServer` on a separate thread
+  * Process any command-line arguments used to start this instance
+  * Do whatever work the application should normally perform
+  * When the application should exit, cancel the token provided to `StartServer`
 
 Once the demo program is running, open a second console window and run it again with any of these switches:
 
