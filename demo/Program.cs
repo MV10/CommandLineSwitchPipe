@@ -3,8 +3,6 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 
-// TODO - currently the TrySendArgs cancellation token isn't actually useful (BinaryReader is synchronous)
-
 namespace demo
 {
     class Program

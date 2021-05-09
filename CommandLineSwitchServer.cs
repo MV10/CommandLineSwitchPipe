@@ -124,7 +124,7 @@ namespace CommandLineSwitchPipe
                             Output($"Invoking switch handler for {args.Length} switches");
                             try
                             {
-                                var response = switchHandler.Invoke(args);
+                                var response = switchHandler.Invoke(args) ?? string.Empty;
                                 await WriteString(server, response);
                             }
                             catch (Exception ex)
