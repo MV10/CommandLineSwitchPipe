@@ -18,7 +18,12 @@ namespace CommandLineSwitchPipe
         /// The defaults are appropriate for most needs, but can also be created or modified through code,
         /// or populated from any of the standard .NET configuration extension packages.
         /// </summary>
-        public static CommandLineSwitchServerOptions Options { get; set; } = new CommandLineSwitchServerOptions();
+        public static CommandLinePipeOptions Options { get; set; } = new CommandLinePipeOptions();
+
+        /// <summary>
+        /// Populated when TrySendArgs is invoked with the waitForReply flag set to true.
+        /// </summary>
+        public static string QueryResponse = string.Empty;
 
         /// <summary>
         /// Attempt to send any command-line switches to an already-running instance. If another
@@ -31,6 +36,8 @@ namespace CommandLineSwitchPipe
             if (Options == null || Options.Advanced == null) 
                 ThrowOutput(new ArgumentNullException($"{nameof(CommandLineSwitchServer)}.{nameof(Options)} property must be configured before invoking {nameof(TrySendArgs)}"));
 
+            QueryResponse = string.Empty;
+
             // Use the provided arguments, or environment array 1+ (array 0 is the program name and/or pathname)
             var arguments = args ?? Environment.GetCommandLineArgs();
             if(args == null)
@@ -39,7 +46,7 @@ namespace CommandLineSwitchPipe
             Output($"Switch list has {arguments.Length} elements, checking for a running instance on pipe \"{PipeName()}\"");
 
             // Is another instance already running?
-            using (var client = new NamedPipeClientStream(PipeName()))
+            using (var client = new NamedPipeClientStream(".", PipeName(), PipeDirection.InOut))
             {
                 try
                 {
@@ -70,11 +77,10 @@ namespace CommandLineSwitchPipe
                 // Send argument list with control-code separators
                 var message = string.Empty;
                 foreach (var arg in arguments) message += arg + Options.Advanced.SeparatorControlCode;
-                var messageBuffer = Encoding.ASCII.GetBytes(message);
-                var sizeBuffer = BitConverter.GetBytes(messageBuffer.Length);
-                await client.WriteAsync(sizeBuffer, 0, sizeBuffer.Length);
-                await client.WriteAsync(messageBuffer, 0, messageBuffer.Length);
-                client.WaitForPipeDrain();
+                await WriteString(client, message);
+
+                Output("Waiting for reply");
+                QueryResponse = await ReadString(client);
             }
 
             Output("Switches sent, this instance can terminate normally");
@@ -82,10 +88,10 @@ namespace CommandLineSwitchPipe
         }
 
         /// <summary>
-        /// Creates a named-pipe server that waits to receive command-line switches from
-        /// another running instance. These are handed off as they're received.
+        /// Creates a named-pipe server that waits to receive command-line switches from another
+        /// running instance. These are sent to the switchHandler delegate as they're received.
         /// </summary>
-        public static async Task StartServer(Action<string[]> switchHandler, CancellationToken cancellationToken)
+        public static async Task StartServer(Func<string[], string> switchHandler, CancellationToken cancellationToken)
         {
             if (Options == null || Options.Advanced == null)
                 ThrowOutput(new ArgumentNullException($"{nameof(CommandLineSwitchServer)}.{nameof(Options)} property must be configured before invoking {nameof(StartServer)}"));
@@ -100,50 +106,48 @@ namespace CommandLineSwitchPipe
             {
                 while (!cancellationToken.IsCancellationRequested)
                 {
-                    using (var server = new NamedPipeServerStream(PipeName()))
+                    using (var server = new NamedPipeServerStream(PipeName(), PipeDirection.InOut))
                     {
                         Output($"Switch pipe server waiting for connection on pipe \"{PipeName()}\"");
                         await server.WaitForConnectionAsync(cancellationToken);
                         cancellationToken.ThrowIfCancellationRequested();
                         Output("Switch pipe client has connected to server");
-                        using (var reader = new BinaryReader(server))
+
+                        var message = await ReadString(server);
+
+                        if (!string.IsNullOrWhiteSpace(message))
                         {
-                            int size = 0;
-                            byte[] buffer = null;
+                            // Split into original arg array
+                            var args = message.Split(Options.Advanced.SeparatorControlCode, StringSplitOptions.RemoveEmptyEntries);
+
+                            // Process the switches, but prevent any handler exceptions from bringing down the server
+                            Output($"Invoking switch handler for {args.Length} switches");
                             try
                             {
-                                // Read the length of the message, then the message itself
-                                size = reader.ReadInt32();
-                                buffer = reader.ReadBytes(size);
-                                Output($"Switch pipe client sending {size} bytes");
+                                var response = switchHandler.Invoke(args);
+                                await WriteString(server, response);
                             }
                             catch (Exception ex)
                             {
-                                Output(LogLevel.Warning, $"Trapped exception {ex.GetType().Name} reading from client");
+                                Output(LogLevel.Warning, $"{ex.GetType().Name} trapped from switch handler");
                             }
-                            finally
+
+                            try
                             {
                                 // Goodbye, client
-                                server.Disconnect();
-                                Output("Switch pipe server terminated client connection");
+                                if(server.IsConnected)
+                                {
+                                    server.Disconnect();
+                                    Output("Switch pipe server terminated client connection");
+                                }
+                                else
+                                {
+                                    Output("Switch pipe server connection was terminated by client");
+                                }
                             }
-
-                            if(size > 0)
+                            catch (Exception ex)
                             {
-                                // Split into original arg array and send for processing
-                                var message = Encoding.ASCII.GetString(buffer);
-                                var args = message.Split(Options.Advanced.SeparatorControlCode, StringSplitOptions.RemoveEmptyEntries);
-
-                                // Process the switches, but prevent any handler exceptions from bringing down the server
-                                Output($"Invoking switch handler for {args.Length} switches");
-                                try
-                                {
-                                    switchHandler.Invoke(args);
-                                }
-                                catch (Exception ex)
-                                {
-                                    Output(LogLevel.Warning, $"Trapped exception {ex.GetType().Name} from switch handler");
-                                }
+                                Output(LogLevel.Warning, $"{ex.GetType().Name} while trying to disconnect from switch pipe client");
                             }
                         }
                     }
@@ -176,6 +180,55 @@ namespace CommandLineSwitchPipe
 
         private static string PipeName()
             => string.IsNullOrWhiteSpace(Options.PipeName) ? Environment.GetCommandLineArgs()[0] : Options.PipeName;
+
+        private static async Task WriteString(PipeStream stream, string message)
+        {
+            try
+            {
+                var messageBuffer = Encoding.ASCII.GetBytes(message);
+                Output($"Sending {messageBuffer.Length} bytes");
+
+                var sizeBuffer = BitConverter.GetBytes(messageBuffer.Length);
+                await stream.WriteAsync(sizeBuffer, 0, sizeBuffer.Length);
+
+                if (message.Length > 0)
+                    await stream.WriteAsync(messageBuffer, 0, messageBuffer.Length);
+
+                stream.WaitForPipeDrain();
+            }
+            catch (Exception ex)
+            {
+                Output(LogLevel.Warning, $"{ex.GetType().Name} while writing stream");
+            }
+        }
+
+        private static async Task<string> ReadString(PipeStream stream)
+        {
+            string response = string.Empty;
+
+            try
+            {
+                using (var reader = new BinaryReader(stream, Encoding.ASCII, leaveOpen: true))
+                {
+                    // Read the length of the message, then the message itself
+                    var size = reader.ReadInt32();
+                    Output($"Receiving {size} bytes");
+
+                    if (size > 0)
+                    {
+                        var buffer = reader.ReadBytes(size);
+                        response = Encoding.ASCII.GetString(buffer);
+                    }
+                }
+                await stream.FlushAsync();
+            }
+            catch (Exception ex)
+            {
+                Output(LogLevel.Warning, $"{ex.GetType().Name} while reading stream");
+            }
+
+            return response;
+        }
 
         private static void Output(string message)
         {

@@ -1,28 +1,38 @@
 # CommandLineSwitchPipe
 
-This library makes it easy for a running service (a .NET console program) to receive new command-line switches and arguments by simply running another instance of the same program with the additional arguments on the command-line.
+This library uses named pipes to pass command-line switches and arguments to a running service (implemented as a .NET console program) by simply running another instance of the same program with the additional arguments on the command-line. The running instance can return a string value in response.
 
 At startup, the program tries to find another instance that was started earlier by attempting to connect to the named pipe server. If the server is found, any command-line arguments are sent to the existing instance, and the new instance should then terminate.
 
-If another instance is not found, that instance will set up a named pipe server to receive new switches and arguments in the future, and that instance becomes the running service.
+If another instance is not found, that instance can set up a named pipe server to receive new switches and arguments in the future, and that instance becomes the running service.
 
-This can be useful for communicating with always-running background services. I recently had a need to run a Kestrel-based WebSocket server this way. This approach works as either a [Windows service](https://docs.microsoft.com/en-us/aspnet/core/host-and-deploy/windows-service?view=aspnetcore-3.1&tabs=visual-studio) or as a [Linux systemd service](https://docs.microsoft.com/en-us/aspnet/core/host-and-deploy/linux-nginx?view=aspnetcore-3.1#create-the-service-file).
+Although the included demo should be run using two console windows, this is be useful in the real world for communicating with always-running background services. I recently had a need to run a Kestrel-based WebSocket server this way. This approach works as either a [Windows service](https://docs.microsoft.com/en-us/aspnet/core/host-and-deploy/windows-service?view=aspnetcore-3.1&tabs=visual-studio) or as a [Linux systemd service](https://docs.microsoft.com/en-us/aspnet/core/host-and-deploy/linux-nginx?view=aspnetcore-3.1#create-the-service-file).
 
 ## Usage
 
-The library serves as a communications conduit only. It does not actually handle command-line parsing, which can be surprisingly complicated. It also doesn't address the problem of how to respond to those new switches. You must provide an `Action<string[]>` switch-handler delegate to process any arguments received from another instance.
+The library serves as a communications conduit only. It does not actually handle command-line parsing, which can be surprisingly complicated. It also doesn't address the problem of how to respond to those new switches. You must provide a switch-handler delegate (accepting a string array and returning a string) to process any arguments received from another instance.
 
 The demo program should be relatively easy to follow, and the code is heavily commented, but the general steps are:
 
 * Call `TrySendArgs` to send the command-line to any already-running instance.
-* If this succeeds, exit, another instance was found and received the data.
-* If this fails, this instance will become the running service:
+
+* If this succeeds, another instance was found and received the data:
+  * Optionally read the `QueryResponse` property
+  * Exit
+
+* If this fails, this instance can assume the role of the running service:
   * Use `Task.Run` to invoke `StartServer` on a separate thread.
   * Process any arguments that were passed this instance.
   * Do whatever work the application should normally perform.
   * When the application should exit, cancel the token provided to `StartServer`.
 
-## Options
+Once the demo program is running, open a second console window and run it again with any of these switches:
+
+* `-quit` will terminate the running service
+* `-date` will return the date portion of the system clock
+* `-time` will return the time portion of the system clock
+
+## Options Property
 
 For most applications, the default options are probably adequate. The console's `Main` method can programmatically set properties on the `CommandLineSwitchServer.Options` property, or they can be populated by the .NET configuration extension packages.
 

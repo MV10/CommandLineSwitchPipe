@@ -2,7 +2,7 @@
 
 namespace CommandLineSwitchPipe
 {
-    public class CommandLineSwitchServerOptions
+    public class CommandLinePipeOptions
     {
         /// <summary>
         /// The pipe name used to communicate command line switches. If this is not provided,

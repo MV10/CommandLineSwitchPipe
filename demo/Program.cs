@@ -3,6 +3,8 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 
+// TODO - currently the TrySendArgs cancellation token isn't actually useful (BinaryReader is synchronous)
+
 namespace demo
 {
     class Program
@@ -15,6 +17,8 @@ namespace demo
 
         static async Task Main(string[] args)
         {
+            Console.Clear();
+
             try
             {
                 // For demo purposes, we want console output.
@@ -23,7 +27,10 @@ namespace demo
                 // Try to send any command line switches to an already-running instance.
                 // If this returns true, the switches were sent and this instance can exit.
                 if (await CommandLineSwitchServer.TrySendArgs())
+                {
+                    Console.WriteLine($"\ndemo: QueryResponse after sending argument list: \"{CommandLineSwitchServer.QueryResponse}\"");
                     return;
+                }
 
                 // Another instance is not running. This instance will start listening for
                 // new switches, and will process any switches provided to this instance.
@@ -34,7 +41,7 @@ namespace demo
                 ProcessSwitches(args, argsReceivedFromPipe: false);
 
                 // Loop until somebody sends a -quit switch.
-                Console.WriteLine($"\nApplication is running. Run with the \"-quit\" switch to terminate this instance.");
+                Console.WriteLine($"\n\nApplication is running.\n* -quit\tTerminates the running instance\n* -date\tReturns the current date\n* -time\tReturns the current time\n\n");
                 ctsRunningInstance = new CancellationTokenSource();
                 while (!ctsRunningInstance.IsCancellationRequested)
                 {
@@ -61,34 +68,53 @@ namespace demo
             }
         }
 
-        private static void ProcessSwitches(string[] args)
+        private static string ProcessSwitches(string[] args)
         {
             Console.WriteLine($"Processing {args.Length} arguments from client instance");
-            ProcessSwitches(args, argsReceivedFromPipe: true);
+            return ProcessSwitches(args, argsReceivedFromPipe: true);
         }
 
-        private static void ProcessSwitches(string[] args, bool argsReceivedFromPipe)
+        private static string ProcessSwitches(string[] args, bool argsReceivedFromPipe)
         {
             if (args.Length == 0)
-                return;
+                return string.Empty;
 
             if (!argsReceivedFromPipe)
                 Console.WriteLine($"Processing {args.Length} arguments directly from the console");
 
-            if (args.Length > 1 || !args[0].Equals("-quit", StringComparison.OrdinalIgnoreCase))
+            if (args.Length > 1)
             {
-                Console.WriteLine("Arguments ignored. This demo only accepts a \"-quit\" switch.");
-                return;
+                Console.WriteLine("Invalid argument list.");
+                return string.Empty;
             }
 
             if (!argsReceivedFromPipe)
             {
-                Console.WriteLine("The \"-quit\" argument is only valid when another copy is already running");
-                return;
+                Console.WriteLine("Command-line arguments are only valid when another copy is already running");
+                return string.Empty;
             }
 
-            Console.WriteLine("Running instance received the \"-quit\" switch");
-            ctsRunningInstance?.Cancel();
+            if (args[0].Equals("-quit", StringComparison.OrdinalIgnoreCase))
+            {
+                Console.WriteLine("Running instance received the \"-quit\" switch");
+                ctsRunningInstance?.Cancel();
+                return "OK";
+            }
+
+            if (args[0].Equals("-date", StringComparison.OrdinalIgnoreCase))
+            {
+                Console.WriteLine("Running instance received the \"-date\" switch");
+                return DateTime.Now.Date.ToString();
+            }
+
+            if (args[0].Equals("-time", StringComparison.OrdinalIgnoreCase))
+            {
+                Console.WriteLine("Running instance received the \"-time\" switch");
+                return DateTime.Now.TimeOfDay.ToString();
+            }
+
+            Console.WriteLine("Invalid argument.");
+            return string.Empty;
         }
     }
 }
