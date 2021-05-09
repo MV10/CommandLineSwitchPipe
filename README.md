@@ -4,9 +4,9 @@ This library uses named pipes to pass command-line switches and arguments to a r
 
 At startup, the program tries to find another instance that was started earlier by attempting to connect to the named pipe server. If the server is found, any command-line arguments are sent to the existing instance, and the new instance should then terminate.
 
-If another instance is not found, that instance can set up a named pipe server to receive new switches and arguments in the future, and that instance becomes the running service.
+If another instance is not found, that instance can become the running service by creating a named pipe server to listen for new command-line arguments to process.
 
-Although the included demo should be run using two console windows, this is be useful in the real world for communicating with always-running background services. I recently had a need to run a Kestrel-based WebSocket server this way. This approach works as either a [Windows service](https://docs.microsoft.com/en-us/aspnet/core/host-and-deploy/windows-service?view=aspnetcore-3.1&tabs=visual-studio) or as a [Linux systemd service](https://docs.microsoft.com/en-us/aspnet/core/host-and-deploy/linux-nginx?view=aspnetcore-3.1#create-the-service-file).
+Although the included demo should be run using two console windows, this is useful in the real world for communicating with always-running background services. I recently had a need to run a Kestrel-based WebSocket server this way. This approach works as either a [Windows service](https://docs.microsoft.com/en-us/aspnet/core/host-and-deploy/windows-service?view=aspnetcore-3.1&tabs=visual-studio) or as a [Linux systemd service](https://docs.microsoft.com/en-us/aspnet/core/host-and-deploy/linux-nginx?view=aspnetcore-3.1#create-the-service-file).
 
 ## Usage
 
