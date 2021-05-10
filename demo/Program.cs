@@ -95,7 +95,7 @@ namespace demo
             if (args[0].Equals("-quit", StringComparison.OrdinalIgnoreCase))
             {
                 Console.WriteLine("Running instance received the \"-quit\" switch");
-                ctsRunningInstance?.Cancel();
+                ctsRunningInstance?.CancelAfter(1000);
                 return "OK";
             }
 
