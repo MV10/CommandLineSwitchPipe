@@ -4,7 +4,7 @@
     <TargetFramework>net6.0</TargetFramework>
     <Description>Communicates command-line arguments to a running background process</Description>
     <Authors>Jon McGuire</Authors>
-    <PackageVersion>1.0.1</PackageVersion>
+    <PackageVersion>1.0.2</PackageVersion>
     <PackageId>CommandLineSwitchPipe</PackageId>
     <PackageTags>services;switches;arguments</PackageTags>
     <PackageLicenseUrl>https://github.com/MV10/CommandLineSwitchPipe/blob/master/LICENSE</PackageLicenseUrl>

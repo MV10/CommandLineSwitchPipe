@@ -14,12 +14,11 @@ The library serves as a communications conduit only. It does not actually handle
 
 The demo program should be relatively easy to follow, and the code is heavily commented, but the general steps are:
 
+* Call `TryConnect` to discover if another instance is already running
 * Call `TrySendArgs` to send the command-line to any already-running instance
-
 * If this succeeds, another instance was found and received the data:
   * Optionally read the `QueryResponse` property
   * Exit
-
 * If this fails, this instance can assume the role of the running service:
   * Use `Task.Run` to invoke `StartServer` on a separate thread
   * Process any command-line arguments used to start this instance
@@ -58,4 +57,4 @@ Defines the character used to separate the command-line arguments when they are 
 This allows the named pipe server to auto-restart if a fatal exception is encountered. This defaults to false, since the server has relatively robust exception handling and should gracefully recover from routine communications issues like a problem on the client side or an exception that bubbles up from the switch-handler delegate.
 
 #### `Advanced.MessageLogLevel`
-Defines the default `LogLevel` for routine activity messages. Defaults to `Debug` since these messages are unlikely to be interesting to typical utility end-users. Other options are `Information` or `Trace`. You should not set this to `Warning`, `Error` or `Critical`.
+Defines the default `LogLevel` for routine activity messages. Defaults to `Debug` since these messages are unlikely to be interesting to typical utility end-users. Other options are `Information` or `Trace`. You should not set this to `Warning`, `Error` or `Critical`. Actual errors in the library will automatically be written with those elevated `LogLevel` flags, regardless of how this property is configured.

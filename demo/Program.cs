@@ -22,6 +22,16 @@ namespace demo
                 // For demo purposes, we want console output.
                 CommandLineSwitchServer.Options.LogToConsole = true;
 
+                // Test the connection
+                if (await CommandLineSwitchServer.TryConnect())
+                {
+                    Console.WriteLine("\ndemo: Successfully connected to another instance.");
+                }
+                else
+                {
+                    Console.WriteLine("\ndemo: Did not connect to another instance. For demo purposes, args will be sent anyway.");
+                }
+
                 // Try to send any command line switches to an already-running instance.
                 // If this returns true, the switches were sent and this instance can exit.
                 if (await CommandLineSwitchServer.TrySendArgs())

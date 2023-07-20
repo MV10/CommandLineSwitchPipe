@@ -26,6 +26,27 @@ namespace CommandLineSwitchPipe
         public static string QueryResponse = string.Empty;
 
         /// <summary>
+        /// Returns true if another instance is already running.
+        /// </summary>
+        public static async Task<bool> TryConnect()
+        {
+            using (var client = new NamedPipeClientStream(".", PipeName(), PipeDirection.InOut))
+            {
+                try
+                {
+                    await client.ConnectAsync(Options.Advanced.PipeConnectionTimeout);
+                }
+                catch (TimeoutException)
+                {
+                    Output($"{nameof(TryConnect)}: No running instance found");
+                    return false;
+                }
+            }
+            Output($"{nameof(TryConnect)}: Running instance found");
+            return true;
+        }
+
+        /// <summary>
         /// Attempt to send any command-line switches to an already-running instance. If another
         /// instance is found but this instance was started without switches, the application will
         /// terminate. Leave the argument list null unless Program.Main needs to pre-process that
@@ -50,7 +71,7 @@ namespace CommandLineSwitchPipe
             {
                 try
                 {
-                    client.Connect(Options.Advanced.PipeConnectionTimeout);
+                    await client.ConnectAsync(Options.Advanced.PipeConnectionTimeout);
                 }
                 catch (TimeoutException)
                 {
