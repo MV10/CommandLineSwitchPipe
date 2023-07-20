@@ -4,17 +4,17 @@
     <TargetFramework>net6.0</TargetFramework>
     <Description>Communicates command-line arguments to a running background process</Description>
     <Authors>Jon McGuire</Authors>
-    <PackageVersion>1.0.2</PackageVersion>
+    <PackageVersion>1.0.3</PackageVersion>
     <PackageId>CommandLineSwitchPipe</PackageId>
     <PackageTags>services;switches;arguments</PackageTags>
     <PackageLicenseUrl>https://github.com/MV10/CommandLineSwitchPipe/blob/master/LICENSE</PackageLicenseUrl>
     <PackageProjectUrl>https://github.com/MV10/CommandLineSwitchPipe/</PackageProjectUrl>
     <RepositoryType>git</RepositoryType>
     <RepositoryUrl>https://github.com/MV10/CommandLineSwitchPipe/</RepositoryUrl>
-    <Version>1.0.1</Version>
+    <Version>1.0.3</Version>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
-    <AssemblyVersion>1.0.1</AssemblyVersion>
-    <FileVersion>1.0.1</FileVersion>  </PropertyGroup>
+    <AssemblyVersion>1.0.3</AssemblyVersion>
+    <FileVersion>1.0.3</FileVersion>  </PropertyGroup>
 
   <ItemGroup>
     <Compile Remove="demo\**" />

@@ -34,7 +34,9 @@ namespace CommandLineSwitchPipe
             {
                 try
                 {
-                    await client.ConnectAsync(Options.Advanced.PipeConnectionTimeout);
+                    // UI clients interpret subsequent code as calls from a non-main thread???
+                    //await client.ConnectAsync(Options.Advanced.PipeConnectionTimeout);
+                    client.Connect(Options.Advanced.PipeConnectionTimeout);
                 }
                 catch (TimeoutException)
                 {
@@ -71,7 +73,9 @@ namespace CommandLineSwitchPipe
             {
                 try
                 {
-                    await client.ConnectAsync(Options.Advanced.PipeConnectionTimeout);
+                    // UI clients interpret subsequent code as calls from a non-main thread???
+                    //await client.ConnectAsync(Options.Advanced.PipeConnectionTimeout);
+                    client.Connect(Options.Advanced.PipeConnectionTimeout);
                 }
                 catch (TimeoutException)
                 {
