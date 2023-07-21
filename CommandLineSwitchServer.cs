@@ -124,9 +124,6 @@ namespace CommandLineSwitchPipe
             if (switchHandler == null)
                 ThrowOutput(new ArgumentNullException(paramName: nameof(switchHandler)));
 
-            if (cancellationToken == null)
-                ThrowOutput(new ArgumentNullException(paramName: nameof(cancellationToken)));
-
             try
             {
                 while (!cancellationToken.IsCancellationRequested)
@@ -247,6 +244,8 @@ namespace CommandLineSwitchPipe
                 }
                 await stream.FlushAsync();
             }
+            catch(EndOfStreamException)
+            { } // normal, disregard
             catch (Exception ex)
             {
                 Output(LogLevel.Warning, $"{ex.GetType().Name} while reading stream");
