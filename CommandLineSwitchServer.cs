@@ -2,6 +2,7 @@
 using System;
 using System.IO;
 using System.IO.Pipes;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -216,7 +217,14 @@ namespace CommandLineSwitchPipe
                 if (message.Length > 0)
                     await stream.WriteAsync(messageBuffer, 0, messageBuffer.Length);
 
-                stream.WaitForPipeDrain();
+                if(RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+                {
+                    stream.WaitForPipeDrain();
+                }
+                else
+                {
+                    await Task.Delay(Options.Advanced.LinuxWaitAfterWriteMS);
+                }
             }
             catch (Exception ex)
             {
@@ -261,11 +269,12 @@ namespace CommandLineSwitchPipe
 
         private static void Output(LogLevel level, string message)
         {
+            var msg = $"{nameof(CommandLineSwitchPipe)}: {message}";
+
             if (Options.LogToConsole || level > LogLevel.Warning) 
                 Console.WriteLine(message);
 
-            if (Options.Logger != null)
-                Options.Logger.Log(level, message);
+            Options.Logger?.Log(level, message);
         }
 
         private static void ThrowOutput(Exception ex)

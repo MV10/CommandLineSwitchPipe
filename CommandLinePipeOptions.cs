@@ -58,5 +58,11 @@ namespace CommandLineSwitchPipe
         /// as Warning, Error, or Critical (aka Fatal) level messages.
         /// </summary>
         public LogLevel MessageLogLevel { get; set; } = LogLevel.Debug;
+
+        /// <summary>
+        /// Linux does not support WaitForPipeDrain on writes, so a short delay can be
+        /// applied to give the other end time to read the contents. Default is 250ms.
+        /// </summary>
+        public int LinuxWaitAfterWriteMS { get; set; } = 250;
     }
 }
