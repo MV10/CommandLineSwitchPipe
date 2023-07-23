@@ -5,17 +5,17 @@
     <Nullable>disable</Nullable>
     <Description>Communicates command-line arguments to a running background process</Description>
     <Authors>Jon McGuire</Authors>
-    <PackageVersion>1.0.4</PackageVersion>
     <PackageId>CommandLineSwitchPipe</PackageId>
     <PackageTags>services;switches;arguments</PackageTags>
     <PackageLicenseUrl>https://github.com/MV10/CommandLineSwitchPipe/blob/master/LICENSE</PackageLicenseUrl>
     <PackageProjectUrl>https://github.com/MV10/CommandLineSwitchPipe/</PackageProjectUrl>
     <RepositoryType>git</RepositoryType>
     <RepositoryUrl>https://github.com/MV10/CommandLineSwitchPipe/</RepositoryUrl>
-    <Version>1.0.5</Version>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+    <Version>1.0.5</Version>
     <AssemblyVersion>1.0.5</AssemblyVersion>
-    <FileVersion>1.0.5</FileVersion>  
+    <FileVersion>1.0.5</FileVersion>
+    <PackageVersion>1.0.5</PackageVersion>
   </PropertyGroup>
 
   <ItemGroup>
