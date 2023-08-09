@@ -20,8 +20,11 @@
 
   <ItemGroup>
     <Compile Remove="demo\**" />
+    <Compile Remove="tcpargs\**" />
     <EmbeddedResource Remove="demo\**" />
+    <EmbeddedResource Remove="tcpargs\**" />
     <None Remove="demo\**" />
+    <None Remove="tcpargs\**" />
   </ItemGroup>
 
   <ItemGroup>
