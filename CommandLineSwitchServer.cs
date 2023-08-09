@@ -39,8 +39,8 @@ namespace CommandLineSwitchPipe
                 ValidateNetworkArgs(server, port);
 
                 return (string.IsNullOrWhiteSpace(server))
-                    ? await TryConnectLocalNamedPipe()
-                    : await TryConnectNetworkPort(server, port);
+                    ? await TryConnectLocalNamedPipe().ConfigureAwait(false)
+                    : await TryConnectNetworkPort(server, port).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
@@ -79,8 +79,8 @@ namespace CommandLineSwitchPipe
                 foreach (var arg in arguments) message += arg + Options.Advanced.SeparatorControlCode;
 
                 return (string.IsNullOrWhiteSpace(server))
-                    ? await TrySendLocalNamedPipe(message)
-                    : await TrySendNetworkPort(message, server, port);
+                    ? await TrySendLocalNamedPipe(message).ConfigureAwait(false)
+                    : await TrySendNetworkPort(message, server, port).ConfigureAwait(false);
             }
             catch(Exception ex)
             {
@@ -117,7 +117,7 @@ namespace CommandLineSwitchPipe
                     using var server = new NamedPipeServerStream(PipeName(), PipeDirection.InOut);
 
                     Output($"Switch pipe server waiting for connection on pipe \"{PipeName()}\"");
-                    await server.WaitForConnectionAsync(cancellationToken);
+                    await server.WaitForConnectionAsync(cancellationToken).ConfigureAwait(false);
                     cancellationToken.ThrowIfCancellationRequested();
                     OutputConsoleSeparator();
                     Output("Switch pipe client has connected to server");
@@ -195,12 +195,12 @@ namespace CommandLineSwitchPipe
             try
             {
                 server = new TcpListener(IPAddress.Any, port);
-                server.Start();
+                server.Start(); // This merely queues connection requests
 
                 while (!cancellationToken.IsCancellationRequested)
                 {
                     Output($"Switch server waiting for connection on TCP port {port}");
-                    using var client = await server.AcceptTcpClientAsync(cancellationToken);
+                    using var client = await server.AcceptTcpClientAsync(cancellationToken).ConfigureAwait(false);
                     cancellationToken.ThrowIfCancellationRequested();
                     OutputConsoleSeparator();
                     Output("TCP client has connected to switch server");
@@ -223,7 +223,7 @@ namespace CommandLineSwitchPipe
 
                             // Can't rely on client.Connected since TCP is stateless
                             activity = "sending response to TCP client";
-                            await WriteStringToNetworkPort(client, response);
+                            await WriteStringToNetworkPort(client, response).ConfigureAwait(false);
                         }
                     }
                     catch (Exception ex)
@@ -263,14 +263,11 @@ namespace CommandLineSwitchPipe
 
         private static async Task<bool> TryConnectLocalNamedPipe()
         {
+            using var client = new NamedPipeClientStream(".", PipeName(), PipeDirection.InOut);
+
             try
             {
-                using var client = new NamedPipeClientStream(".", PipeName(), PipeDirection.InOut);
-
-                // UI clients interpret subsequent code as calls from a non-main thread???
-                //await client.ConnectAsync(Options.Advanced.PipeConnectionTimeout);
-                
-                client.Connect(Options.Advanced.PipeConnectionTimeout);
+                await client.ConnectAsync(Options.Advanced.PipeConnectionTimeout).ConfigureAwait(false);
             }
             catch (TimeoutException)
             {
@@ -288,7 +285,7 @@ namespace CommandLineSwitchPipe
             if (addresses.Length == 0) throw new ArgumentException("Could not resolve address for host name");
 
             using TcpClient client = new();
-            await client.ConnectAsync(addresses, port);
+            await client.ConnectAsync(addresses, port).ConfigureAwait(false);
             
             Output($"{nameof(TryConnectNetworkPort)}: {(client.Connected ? "Running" : "No running")} instance found");
             return client.Connected;
@@ -298,15 +295,11 @@ namespace CommandLineSwitchPipe
         {
             Output($"Checking for a running instance on pipe \"{PipeName()}\"");
 
-            // Is another instance already running?
             using var client = new NamedPipeClientStream(".", PipeName(), PipeDirection.InOut);
 
             try
             {
-                // UI clients interpret subsequent code as calls from a non-main thread???
-                //await client.ConnectAsync(Options.Advanced.PipeConnectionTimeout);
-
-                client.Connect(Options.Advanced.PipeConnectionTimeout);
+                await client.ConnectAsync(Options.Advanced.PipeConnectionTimeout).ConfigureAwait(false);
             }
             catch (TimeoutException)
             {
@@ -321,10 +314,10 @@ namespace CommandLineSwitchPipe
                 throw new ArgumentException("No arguments were provided to pass to the already-running instance");
 
             Output("Sending switches to running instance");
-            await WriteStringToPipe(client, message);
+            await WriteStringToPipe(client, message).ConfigureAwait(false);
 
             Output("Waiting for reply");
-            QueryResponse = await ReadStringFromPipe(client);
+            QueryResponse = await ReadStringFromPipe(client).ConfigureAwait(false);
             Options.Logger?.Log(LogLevel.Debug, $"Received:\n{QueryResponse}");
 
             Output($"Switches sent, PID {Environment.ProcessId} can terminate normally");
@@ -340,7 +333,7 @@ namespace CommandLineSwitchPipe
             Output($"Resolved {addresses.Length} addresses for server {server}");
 
             using TcpClient client = new();
-            await client.ConnectAsync(addresses, port);
+            await client.ConnectAsync(addresses, port).ConfigureAwait(false);
             if (!client.Connected) throw new Exception("Failed to connect, but no framework exception was thrown");
 
             Output($"Connected to switch pipe server");
@@ -350,10 +343,10 @@ namespace CommandLineSwitchPipe
                 throw new ArgumentException("No arguments were provided to pass to the already-running instance");
 
             Output("Sending switches to running instance");
-            await WriteStringToNetworkPort(client, message);
+            await WriteStringToNetworkPort(client, message).ConfigureAwait(false);
 
             Output("Waiting for reply");
-            QueryResponse = await ReadStringFromNetworkPort(client);
+            QueryResponse = await ReadStringFromNetworkPort(client).ConfigureAwait(false);
             Options.Logger?.Log(LogLevel.Debug, $"Received:\n{QueryResponse}");
 
             Output($"Switches sent, PID {Environment.ProcessId} can terminate normally");
@@ -362,18 +355,19 @@ namespace CommandLineSwitchPipe
 
         private static async Task WriteStringToPipe(PipeStream stream, string message)
         {
+            if (message.Length == 0) return;
+
             try
             {
                 var messageBuffer = Encoding.ASCII.GetBytes(message);
                 Output($"Sending {messageBuffer.Length} bytes");
 
                 var sizeBuffer = BitConverter.GetBytes(messageBuffer.Length);
-                await stream.WriteAsync(sizeBuffer, 0, sizeBuffer.Length);
+                await stream.WriteAsync(sizeBuffer, 0, sizeBuffer.Length).ConfigureAwait(false);
 
-                if (message.Length > 0)
-                    await stream.WriteAsync(messageBuffer, 0, messageBuffer.Length);
+                await stream.WriteAsync(messageBuffer, 0, messageBuffer.Length).ConfigureAwait(false);
 
-                await stream.FlushAsync();
+                await stream.FlushAsync().ConfigureAwait(false);
 
                 if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
                 {
@@ -381,7 +375,7 @@ namespace CommandLineSwitchPipe
                 }
                 else
                 {
-                    await Task.Delay(Options.Advanced.LinuxWaitAfterWriteMS);
+                    await Task.Delay(Options.Advanced.LinuxWaitAfterWriteMS).ConfigureAwait(false);
                 }
             }
             catch (Exception ex)
@@ -408,7 +402,7 @@ namespace CommandLineSwitchPipe
                     response = Encoding.ASCII.GetString(buffer);
                 }
 
-                await stream.FlushAsync();
+                await stream.FlushAsync().ConfigureAwait(false);
             }
             catch(EndOfStreamException)
             { } // normal, disregard
@@ -433,8 +427,8 @@ namespace CommandLineSwitchPipe
                 if (messageBuffer.Length > minBuff) throw new ArgumentException($"Message with delimiters exceeds {minBuff} byte buffer size");
 
                 Output($"Sending {messageBuffer.Length} bytes");
-                await stream.WriteAsync(messageBuffer, 0, messageBuffer.Length);
-                await stream.FlushAsync();
+                await stream.WriteAsync(messageBuffer, 0, messageBuffer.Length).ConfigureAwait(false);
+                await stream.FlushAsync().ConfigureAwait(false);
             }
             catch (Exception ex)
             {
@@ -452,8 +446,8 @@ namespace CommandLineSwitchPipe
 
                 var maxBuff = Math.Max(client.SendBufferSize, client.ReceiveBufferSize);
                 var messageBuffer = new byte[maxBuff];
-                var bytes = await stream.ReadAsync(messageBuffer, 0, maxBuff);
-                await stream.FlushAsync();
+                var bytes = await stream.ReadAsync(messageBuffer, 0, maxBuff).ConfigureAwait(false);
+                await stream.FlushAsync().ConfigureAwait(false);
                 Output($"Received {bytes} bytes");
 
                 response = Encoding.ASCII.GetString(messageBuffer, 0, bytes);
@@ -467,72 +461,6 @@ namespace CommandLineSwitchPipe
 
             return response;
         }
-
-        //private static async Task WriteStringToNetworkPort(TcpClient client, string message)
-        //{
-        //    try
-        //    {
-        //        using var stream = client.GetStream();
-
-        //        var messageBuffer = Encoding.ASCII.GetBytes(message);
-        //        Output($"Sending {messageBuffer.Length} bytes");
-
-        //        var sizeBuffer = BitConverter.GetBytes(messageBuffer.Length);
-        //        await stream.WriteAsync(sizeBuffer, 0, sizeBuffer.Length);
-
-        //        if (message.Length > 0)
-        //            await stream.WriteAsync(messageBuffer, 0, messageBuffer.Length);
-
-        //        await stream.FlushAsync();
-        //    }
-        //    catch (Exception ex)
-        //    {
-        //        Output(LogLevel.Warning, $"{ex.GetType().Name} while writing to NetworkStream");
-        //    }
-        //}
-
-        //private static async Task<string> ReadStringFromNetworkPort(TcpClient client)
-        //{
-        //    string response = string.Empty;
-
-        //    try
-        //    {
-        //        using var stream = client.GetStream();
-        //        using var reader = new BinaryReader(stream, Encoding.ASCII, leaveOpen: true);
-
-        //        var timeout = DateTime.Now.AddMilliseconds(Options.Advanced.NetworkResponseWaitMS);
-        //        while (DateTime.Now < timeout && !stream.DataAvailable)
-        //        {
-        //            Thread.Sleep(0);
-        //        };
-
-        //        if (DateTime.Now >= timeout)
-        //        {
-        //            Output($"No data received on NetworkStream after {Options.Advanced.NetworkResponseWaitMS}ms");
-        //            return string.Empty;
-        //        }
-
-        //        // Read the length of the message, then the message itself
-        //        var size = reader.ReadInt32();
-        //        Output($"Receiving {size} bytes");
-
-        //        if (size > 0)
-        //        {
-        //            var buffer = reader.ReadBytes(size);
-        //            response = Encoding.ASCII.GetString(buffer);
-        //        }
-
-        //        await stream.FlushAsync();
-        //    }
-        //    catch (EndOfStreamException)
-        //    { } // normal, disregard
-        //    catch (Exception ex)
-        //    {
-        //        Output(LogLevel.Warning, $"{ex.GetType().Name} while reading from NetworkStream");
-        //    }
-
-        //    return response;
-        //}
 
         private static string PipeName()
             => string.IsNullOrWhiteSpace(Options.PipeName) ? Environment.GetCommandLineArgs()[0] : Options.PipeName;

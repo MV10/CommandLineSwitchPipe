@@ -37,12 +37,6 @@ namespace CommandLineSwitchPipe
         public int UnsecuredPort { get; set; } = 0;
 
         /// <summary>
-        /// When sending switches via TCP to a remote server, this defines how long the
-        /// program waits for results before abandoning the connection. The default is 5000ms.
-        /// </summary>
-        public int NetworkResponseWaitMS { get; set; } = 5000;
-
-        /// <summary>
         /// Typically, running an application with no switches is used to start the application with
         /// default settings. In that case, if an instance is already running, the new instance should
         /// exit. This is true by default, which generates an exception. If false, no exception is thrown,
