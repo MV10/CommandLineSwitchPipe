@@ -12,10 +12,10 @@
     <RepositoryType>git</RepositoryType>
     <RepositoryUrl>https://github.com/MV10/CommandLineSwitchPipe/</RepositoryUrl>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
-    <Version>1.0.5</Version>
-    <AssemblyVersion>1.0.5</AssemblyVersion>
-    <FileVersion>1.0.5</FileVersion>
-    <PackageVersion>1.0.5</PackageVersion>
+    <Version>1.1.0</Version>
+    <AssemblyVersion>1.1.0</AssemblyVersion>
+    <FileVersion>1.1.0</FileVersion>
+    <PackageVersion>1.1.0</PackageVersion>
   </PropertyGroup>
 
   <ItemGroup>

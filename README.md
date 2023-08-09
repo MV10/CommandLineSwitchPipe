@@ -8,14 +8,28 @@ If another instance is not found, that instance can become the running service b
 
 Although the included demo should be run using two console windows, this is useful in the real world for communicating with always-running background services. I recently had a need to run a Kestrel-based WebSocket server this way. This approach works as either a [Windows service](https://docs.microsoft.com/en-us/aspnet/core/host-and-deploy/windows-service?view=aspnetcore-3.1&tabs=visual-studio) or as a [Linux systemd service](https://docs.microsoft.com/en-us/aspnet/core/host-and-deploy/linux-nginx?view=aspnetcore-3.1#create-the-service-file).
 
-## Usage
+## Network Support
 
-The library serves as a communications conduit only. It does not actually handle command-line parsing, which can be surprisingly complicated. It also doesn't address the problem of how to respond to those new switches. You must provide a switch-handler delegate (accepting a string array and returning a string) to process any arguments received from another instance.
+I was asked to add support for remote named pipes, but that's a Windows-only feature, and I want the library to remain cross-platform. (Named pipes originated on UNIX, and there it is specifically defined as local-only IPC which is closely tied to the file system.)
 
-The demo program should be relatively easy to follow, and the code is heavily commented, but the general steps are:
+Instead, version 1.1.0 adds a simple TCP-listener feature in the form of an `UnsecuredPort` option for the server (in the "advanced" group of settings), and optional `server` and `port` arguments to the `TryConnect` and `TrySend` methods. As the option name indicates, this is _**not**_ secure -- do not use this where the port might be visible to a public network. It tries to accept _anything_ that is sent to the port.
+
+Although this is somewhat re-inventing the wheel for Windows, this means it will seamlessly work exactly the same way for Linux -- or between Windows and Linux client/server combinations. Note that Windows will probably prompt you to add a firewall rule to allow the program to listen for TCP traffic.
+
+The solution also contains a simple command-line utility in the `tcpargs` project, which can be used to remotely send an argument list to a given endpoint. This uses `TryConnect` and `TrySend` as a stand-alone client (in other words, it doesn't "take over" and start running if `TrySend` fails to locate an existing instance). The syntax is:
+
+* `tcpargs [server|localhost] [port] [arg1] [arg2] ... [argN]`
+
+Since the library is meant for very basic string exchanges, it does not adjust the default 8K send/receive buffer sizes. Only single-buffer read/write operations are supported, so any data larger than 8K (including minor overhead for separators and a data-length header) will cause an exception.
+
+## Usage and Demo
+
+The library serves as a communications conduit only. It does not actually handle command-line parsing, which can be surprisingly complicated. It also doesn't address the problem of how to respond to those new switches in the running program. You must provide a switch-handler delegate (accepting a string array and returning a string) to process any arguments received from another instance.
+
+The demo program should be relatively easy to follow (and the new TCP client is even less complicated), and the code is heavily commented, but the general steps are:
 
 * Call `TryConnect` to discover if another instance is already running
-* Call `TrySendArgs` to send the command-line to any already-running instance
+* Call `TrySendArgs` to send arguments to any already-running instance
 * If this succeeds, another instance was found and received the data:
   * Optionally read the `QueryResponse` property
   * Exit
@@ -25,11 +39,17 @@ The demo program should be relatively easy to follow, and the code is heavily co
   * Do whatever work the application should normally perform
   * When the application should exit, cancel the token provided to `StartServer`
 
-Once the demo program is running, open a second console window and run it again with any of these switches:
+Just execute `demo` to start the server in local named-pipes mode. Once the demo program is running, open a second console window and run it again with any of these switches:
 
 * `-quit` will terminate the running service
 * `-date` will return the date portion of the system clock
 * `-time` will return the time portion of the system clock
+
+To start the server listening on a port, execute `demo -port [PORT]` where the port number is 49152 to 65536 (the custom/dynamic port range), such as:
+
+* `demo -port 50001`
+
+However, the demo does not have a way to send the switches over the network, as that would significantly complicate the code (which makes it hard to understand, as a demo). Instead, use the `tcpargs` utility described in the _Network Support_ section above. This utility is also a good example of how you'd build a simple remote control app that communicates via switches.
 
 ## Options Property
 
@@ -43,6 +63,9 @@ When set to an `ILogger` object, all types of messages are written to the provid
 
 #### `LogToConsole`
 When set to true, activity and warning messages will be written to the console (stdout). It is false by default, since these messages are typically uninteresting to day-to-day utility users. Errors and critical (fatal) messages are always written to the console.
+
+#### `Advanced.UnsecuredPort`
+Zero by default, which disables the feature. If provided, the server will listen on the indicated TCP port. Anything received will be sent to the switch-handler delegate, and any response is sent back to the client over the same TCP connection.
 
 #### `Advanced.ThrowIfRunning`
 Typically, when the application is started without any command-line arguments, that instance will be the first one to start, and it just means the application's default settings should be used. If the application is started this way and there is already another instance running (it is able to connect to the other instance's named pipe server), the new instance will terminate. This determines whether the new instance simply exits, or if it throws an exception. The default is true, an exception is thrown.
