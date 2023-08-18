@@ -39,8 +39,9 @@ namespace CommandLineSwitchPipe
         /// <summary>
         /// Typically, running an application with no switches is used to start the application with
         /// default settings. In that case, if an instance is already running, the new instance should
-        /// exit. This is true by default, which generates an exception. If false, no exception is thrown,
-        /// but there will be console and/or log output, depending on the configuration.
+        /// exit. This is true by default, which generates a System.ArgumentException. If false, no
+        /// exception is thrown, but there will be console and/or log output, depending on the configuration.
+        /// If no exception is thrown, the library will forcibly end the process.
         /// </summary>
         public bool ThrowIfRunning { get; set; } = true;
 

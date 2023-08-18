@@ -9,7 +9,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\CommandLineSwitchPipe.csproj" />
-    <ProjectReference Include="..\CommandLineSwitchPipe\CommandLineSwitchPipe.csproj" />
   </ItemGroup>
 
 </Project>

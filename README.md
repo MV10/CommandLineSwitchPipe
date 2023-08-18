@@ -33,7 +33,11 @@ The demo program should be relatively easy to follow (and the new TCP client is 
 * If this succeeds, another instance was found and received the data:
   * Optionally read the `QueryResponse` property
   * Exit
-* If this fails, this instance can assume the role of the running service:
+* If this fails, check the `TryException` property, but note:
+  * Named pipe timeout is handled internally
+  * TCP connection-refused is handled internally
+  * These indicate a "normal" no-server-running condition
+* Absent an exception, this instance can assume the role of the running service:
   * Use `Task.Run` to invoke `StartServer` on a separate thread
   * Process any command-line arguments used to start this instance
   * Do whatever work the application should normally perform
@@ -41,13 +45,13 @@ The demo program should be relatively easy to follow (and the new TCP client is 
 
 Just execute `demo` to start the server in local named-pipes mode. Once the demo program is running, open a second console window and run it again with any of these switches:
 
-* `-quit` will terminate the running service
-* `-date` will return the date portion of the system clock
-* `-time` will return the time portion of the system clock
+* `--quit` will terminate the running service
+* `--date` will return the date portion of the system clock
+* `--time` will return the time portion of the system clock
 
-To start the server listening on a port, execute `demo -port [PORT]` where the port number is 49152 to 65536 (the custom/dynamic port range), such as:
+To start the server listening on a port, execute `demo --port [PORT]` where the port number is 49152 to 65536 (the custom/dynamic port range), such as:
 
-* `demo -port 50001`
+* `demo --port 50001`
 
 However, the demo does not have a way to send the switches over the network, as that would significantly complicate the code (which makes it hard to understand, as a demo). Instead, use the `tcpargs` utility described in the _Network Support_ section above. This utility is also a good example of how you'd build a simple remote control app that communicates via switches.
 
@@ -68,7 +72,7 @@ When set to true, activity and warning messages will be written to the console (
 Zero by default, which disables the feature. If provided, the server will listen on the indicated TCP port. Anything received will be sent to the switch-handler delegate, and any response is sent back to the client over the same TCP connection.
 
 #### `Advanced.ThrowIfRunning`
-Typically, when the application is started without any command-line arguments, that instance will be the first one to start, and it just means the application's default settings should be used. If the application is started this way and there is already another instance running (it is able to connect to the other instance's named pipe server), the new instance will terminate. This determines whether the new instance simply exits, or if it throws an exception. The default is true, an exception is thrown.
+Typically, when the application is started without any command-line arguments, that instance will be the first one to start, and it just means the application's default settings should be used. If the application is started without switches and there is already another instance running (it is able to connect to the other instance's named pipe server), the new instance should terminate. This determines whether the new instance simply exits, or if it throws a `System.ArgumentException`. The default is true, an exception is thrown. If false, the library forcibly ends the process.
 
 #### `Advanced.PipeConnectionTimeout`
 The number of milliseconds to wait for a named pipe server to respond. This defaults to 100ms, but realistically even 10ms is typically adequate.

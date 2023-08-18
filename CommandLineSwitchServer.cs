@@ -29,11 +29,17 @@ namespace CommandLineSwitchPipe
         public static string QueryResponse = string.Empty;
 
         /// <summary>
+        /// Populated when TrySendArgs or TryConnect results in an exception.
+        /// </summary>
+        public static Exception TryException = null;
+
+        /// <summary>
         /// Returns true if another instance is already running.
         /// </summary>
         public static async Task<bool> TryConnect(string server = null, int port = 0)
         {
             Output($"{nameof(TryConnect)} starting for PID {Environment.ProcessId}");
+            TryException = null;
             try
             {
                 ValidateNetworkArgs(server, port);
@@ -45,6 +51,7 @@ namespace CommandLineSwitchPipe
             catch (Exception ex)
             {
                 OutputException(ex);
+                TryException = ex;
                 return false;
             }
         }
@@ -58,6 +65,7 @@ namespace CommandLineSwitchPipe
         public static async Task<bool> TrySendArgs(string[] args = null, string server = null, int port = 0)
         {
             Output($"{nameof(TrySendArgs)} starting for PID {Environment.ProcessId}");
+            TryException = null;
             try
             {
                 if (Options == null || Options.Advanced == null)
@@ -85,7 +93,7 @@ namespace CommandLineSwitchPipe
             catch(Exception ex)
             {
                 OutputException(ex);
-                Environment.Exit(-1);
+                TryException = ex;
                 return false;
             }
         }
@@ -285,9 +293,21 @@ namespace CommandLineSwitchPipe
             if (addresses.Length == 0) throw new ArgumentException("Could not resolve address for host name");
 
             using TcpClient client = new();
-            await client.ConnectAsync(addresses, port).ConfigureAwait(false);
-            
-            Output($"{nameof(TryConnectNetworkPort)}: {(client.Connected ? "Running" : "No running")} instance found");
+            try
+            {
+                await client.ConnectAsync(addresses, port).ConfigureAwait(false);
+            }
+            catch (SocketException ex)
+            {
+                if(ex.SocketErrorCode == SocketError.ConnectionRefused)
+                {
+                    Output($"{nameof(TryConnectNetworkPort)}: No running instance found");
+                    return false;
+                }
+                throw;
+            }
+
+            Output($"{nameof(TryConnectNetworkPort)}: Running instance found");
             return client.Connected;
         }
 
@@ -310,8 +330,16 @@ namespace CommandLineSwitchPipe
             Output($"Connected to switch pipe server");
 
             // Connected, abort if we don't have arguments to pass
-            if (string.IsNullOrEmpty(message) && Options.Advanced.ThrowIfRunning)
-                throw new ArgumentException("No arguments were provided to pass to the already-running instance");
+            if (string.IsNullOrEmpty(message))
+            {
+                Output("No arguments to pass to the running instance.");
+
+                if(Options.Advanced.ThrowIfRunning)
+                    throw new ArgumentException("No arguments were provided to pass to the already-running instance");
+
+                Output("Not configured to throw an exception; forcing an exit");
+                Environment.Exit(-1);
+            }
 
             Output("Sending switches to running instance");
             await WriteStringToPipe(client, message).ConfigureAwait(false);
@@ -333,14 +361,34 @@ namespace CommandLineSwitchPipe
             Output($"Resolved {addresses.Length} addresses for server {server}");
 
             using TcpClient client = new();
-            await client.ConnectAsync(addresses, port).ConfigureAwait(false);
+            try
+            {
+                await client.ConnectAsync(addresses, port).ConfigureAwait(false);
+            }
+            catch (SocketException ex)
+            {
+                if (ex.SocketErrorCode == SocketError.ConnectionRefused)
+                {
+                    Output($"{nameof(TryConnectNetworkPort)}: No running instance found");
+                    return false;
+                }
+                throw;
+            }
             if (!client.Connected) throw new Exception("Failed to connect, but no framework exception was thrown");
 
             Output($"Connected to switch pipe server");
 
             // Connected, abort if we don't have arguments to pass
-            if (string.IsNullOrEmpty(message) && Options.Advanced.ThrowIfRunning)
-                throw new ArgumentException("No arguments were provided to pass to the already-running instance");
+            if (string.IsNullOrEmpty(message))
+            {
+                Output("No arguments to pass to the running instance.");
+
+                if (Options.Advanced.ThrowIfRunning)
+                    throw new ArgumentException("No arguments were provided to pass to the already-running instance");
+
+                Output("Not configured to throw an exception; forcing an exit");
+                Environment.Exit(-1);
+            }
 
             Output("Sending switches to running instance");
             await WriteStringToNetworkPort(client, message).ConfigureAwait(false);

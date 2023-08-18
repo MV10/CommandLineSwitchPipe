@@ -22,8 +22,14 @@ namespace demo
 
             try
             {
-                Console.WriteLine("\ndemo: Forcing console logging for demo purposes.");
+                Console.WriteLine($"\ndemo: Starting PID {Environment.ProcessId}");
+
+                Console.WriteLine("demo: Forcing console logging for demo purposes.");
+                Console.WriteLine("demo: Anything not prefixed by \"demo\" is logged by the library");
                 CommandLineSwitchServer.Options.LogToConsole = true;
+
+                Console.WriteLine("demo: Disabling ArgumentException if secondary instance started without arguments.\n\n");
+                CommandLineSwitchServer.Options.Advanced.ThrowIfRunning = false;
 
                 // Test the connection
                 if (await CommandLineSwitchServer.TryConnect())
@@ -33,15 +39,29 @@ namespace demo
                 else
                 {
                     Console.WriteLine("\ndemo: Did not connect to another instance. For demo-logging purposes, args will be sent anyway.");
+                    if(CommandLineSwitchServer.TryException is not null)
+                    {
+                        Console.WriteLine($"\ndemo: Connection attempt returned {CommandLineSwitchServer.TryException}.");
+                    }
                 }
 
                 // Try to send any command line switches to an already-running instance.
                 // If this returns true, the switches were sent and this instance can exit.
+                // If this returns false, report any exceptions and try to become the running instance.
                 if (await CommandLineSwitchServer.TrySendArgs())
                 {
                     Console.WriteLine($"\ndemo: QueryResponse after sending argument list: \"{CommandLineSwitchServer.QueryResponse}\"");
                     return;
                 }
+                else
+                {
+                    if (CommandLineSwitchServer.TryException is not null)
+                    {
+                        Console.WriteLine($"\ndemo: Connection attempt returned {CommandLineSwitchServer.TryException}.");
+                        Console.WriteLine("\ndemo: Proceeding to become the running instance anyway.");
+                    }
+                }
+
 
                 // Another instance is not running. This instance will start listening for
                 // new switches, and will process any switches provided to this instance.
@@ -52,7 +72,7 @@ namespace demo
                 _ = Task.Run(() => CommandLineSwitchServer.StartServer(ProcessSwitches, ctsSwitchPipe.Token, tcpListeningPort));
 
                 // Loop until somebody sends a -quit switch.
-                Console.WriteLine($"\n\ndemo: Application is running.\n* -quit\tTerminates the running instance\n* -date\tReturns the current date\n* -time\tReturns the current time\n\n");
+                Console.WriteLine($"\n\ndemo: Application is running.\n* --quit\tTerminates the running instance\n* --date\tReturns the current date\n* --time\tReturns the current time\n\n");
                 ctsRunningInstance = new CancellationTokenSource();
                 while (!ctsRunningInstance.IsCancellationRequested)
                 {
@@ -65,7 +85,7 @@ namespace demo
             { } // normal, disregard
             catch (Exception ex)
             {
-                Console.WriteLine($"\nException of type {ex.GetType().Name}\n{ex.Message}");
+                Console.WriteLine($"\ndemo: Exception of type {ex.GetType().Name}\n{ex.Message}");
                 if (ex.InnerException != null) Console.Write(ex.InnerException.Message);
                 Console.WriteLine($"\n{ex.StackTrace}");
             }
@@ -76,12 +96,12 @@ namespace demo
                 ctsRunningInstance?.Cancel(); // in case of exception...
             }
 
-            Console.Write("demo: Application is exiting.");
+            Console.Write($"demo: Application is exiting, PID {Environment.ProcessId}");
         }
 
         private static string ProcessSwitches(string[] args)
         {
-            Console.WriteLine($"Processing {args.Length} arguments from non-server instance");
+            Console.WriteLine($"demo: Processing {args.Length} arguments from non-server instance");
             return ProcessSwitches(args, argsReceivedFromPipe: true);
         }
 
@@ -92,11 +112,11 @@ namespace demo
 
             if (!argsReceivedFromPipe)
             {
-                Console.WriteLine($"Processing {args.Length} arguments directly from the console");
+                Console.WriteLine($"demo: Processing {args.Length} arguments directly from the console");
 
-                if(args.Length != 2 || !(args[0].Equals("-port", StringComparison.InvariantCultureIgnoreCase) && int.TryParse(args[1], out tcpListeningPort)))
+                if(args.Length != 2 || !(args[0].Equals("--port", StringComparison.InvariantCultureIgnoreCase) && int.TryParse(args[1], out tcpListeningPort)))
                 {
-                    return "\nInvalid argument list. First-run usage:\ndemo -port [TCP_PORT_NUMBER]\n\nPort numbers between 49152 and 65536 are recommended.\n";
+                    return "\nInvalid argument list. First-run usage:\ndemo --port [TCP_PORT_NUMBER]\n\nPort numbers between 49152 and 65536 are recommended.\n";
                 }
 
                 return $"Received command to start listening on TCP port {tcpListeningPort}";
@@ -104,31 +124,31 @@ namespace demo
 
             if (args.Length > 1)
             {
-                Console.WriteLine("Invalid argument list.");
-                return string.Empty;
+                Console.WriteLine("demo: Invalid argument list.");
+                return "Invalid argument list, the listening server only accepts a --date, --time, or --quit switch.";
             }
 
-            if (args[0].Equals("-quit", StringComparison.OrdinalIgnoreCase))
+            if (args[0].Equals("--quit", StringComparison.OrdinalIgnoreCase))
             {
-                Console.WriteLine("Running instance received the \"-quit\" switch");
+                Console.WriteLine("demo: Running instance received the \"--quit\" switch");
                 ctsRunningInstance?.CancelAfter(1000);
-                return "OK";
+                return "Server quitting";
             }
 
-            if (args[0].Equals("-date", StringComparison.OrdinalIgnoreCase))
+            if (args[0].Equals("--date", StringComparison.OrdinalIgnoreCase))
             {
-                Console.WriteLine("Running instance received the \"-date\" switch");
-                return DateTime.Now.Date.ToString();
+                Console.WriteLine("demo: Running instance received the \"--date\" switch");
+                return DateTime.Now.Date.ToString("ddd MM-dd-yyyy");
             }
 
-            if (args[0].Equals("-time", StringComparison.OrdinalIgnoreCase))
+            if (args[0].Equals("--time", StringComparison.OrdinalIgnoreCase))
             {
-                Console.WriteLine("Running instance received the \"-time\" switch");
-                return DateTime.Now.TimeOfDay.ToString();
+                Console.WriteLine("demo: Running instance received the \"--time\" switch");
+                return DateTime.Now.ToString("h:mm:ss tt");
             }
 
-            Console.WriteLine("Invalid argument.");
-            return string.Empty;
+            Console.WriteLine("demo: Invalid argument.");
+            return $"Invalid argument: {args[0]}";
         }
     }
 }
