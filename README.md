@@ -83,8 +83,9 @@ Defines the character used to separate the command-line arguments when they are 
 #### `Advanced.AutoRestartServer`
 This allows the named pipe server to auto-restart if a fatal exception is encountered. This defaults to false, since the server has relatively robust exception handling and should gracefully recover from routine communications issues like a problem on the client side or an exception that bubbles up from the switch-handler delegate.
 
-#### `Advanced.MessageLogLevel`
-Defines the default `LogLevel` for routine activity messages. Defaults to `Debug` since these messages are unlikely to be interesting to typical utility end-users. Other options are `Information` or `Trace`. You should not set this to `Warning`, `Error` or `Critical`. Actual errors in the library will automatically be written with those elevated `LogLevel` flags, regardless of how this property is configured.
-
 #### `Advanced.LinuxWaitAfterWriteMS`
 On Windows, writing to a pipe is followed by the `WaitForPipeDrain` command, but this throws a "Platform Not Supported" exception on Linux. This provides a short asynchronous delay after a write operation (250ms by default) to allow the other end time to read the contents of the pipe stream.
+
+#### Obsolete: `Advanced.MessageLogLevel`
+_Removed after v1.1.1, now all internal log levels are hard-coded._
+

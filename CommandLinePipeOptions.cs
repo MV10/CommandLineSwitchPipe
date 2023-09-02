@@ -62,13 +62,6 @@ namespace CommandLineSwitchPipe
         public bool AutoRestartServer { get; set; } = false;
 
         /// <summary>
-        /// When a logger is provided, this determines the level of messages logged during normal operation. Options are
-        /// Information, Debug, or Trace (aka Verbose in most logger systems). This setting is ignored for events logged
-        /// as Warning, Error, or Critical (aka Fatal) level messages.
-        /// </summary>
-        public LogLevel MessageLogLevel { get; set; } = LogLevel.Debug;
-
-        /// <summary>
         /// Linux does not support WaitForPipeDrain on writes, so a short delay can be
         /// applied to give the other end time to read the contents. Default is 250ms.
         /// </summary>
