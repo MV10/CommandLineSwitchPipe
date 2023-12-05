@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "tcpargs": {
+      "commandName": "Project",
+      "commandLineArgs": "localhost 50001 --time"
+    }
+  }
+}

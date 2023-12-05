@@ -299,7 +299,7 @@ namespace CommandLineSwitchPipe
         {
             Output(LogLevel.Trace, $"{nameof(TryConnectNetworkPort)}(server:{server}, port:{port}) invoked");
 
-            var addresses = await Dns.GetHostAddressesAsync(server);
+            var addresses = await Dns.GetHostAddressesAsync(server, (AddressFamily)Options.Advanced.DnsAddressFamily, CancellationToken.None);
             if (addresses.Length == 0) throw new ArgumentException("Could not resolve address for host name");
 
             using TcpClient client = new();
@@ -370,7 +370,7 @@ namespace CommandLineSwitchPipe
 
             Output($"Checking for a running instance on server {server}:{port}");
 
-            var addresses = await Dns.GetHostAddressesAsync(server);
+            var addresses = await Dns.GetHostAddressesAsync(server, (AddressFamily)Options.Advanced.DnsAddressFamily, CancellationToken.None);
             if (addresses.Length == 0) throw new ArgumentException("Could not resolve address for host name");
             Output($"Resolved {addresses.Length} addresses for server {server}");
 

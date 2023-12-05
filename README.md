@@ -73,6 +73,9 @@ When set to true, activity and warning messages will be written to the console (
 #### `Advanced.UnsecuredPort`
 Zero by default, which disables the feature. If provided, the server will listen on the indicated TCP port. Anything received will be sent to the switch-handler delegate, and any response is sent back to the client over the same TCP connection.
 
+#### `Advanced.DnsAddressFamily`
+Zero by default, which will resolve any type of address. These map to the .NET [AddressFamily](https://learn.microsoft.com/en-us/dotnet/api/system.net.sockets.addressfamily?view=net-8.0) enumeration. The value is not validated. The most useful value is 2, which only returns IPv4 addresses. You may also want 23, which only returns IPv6 addresses. The problem it solves (particularly with localhost / loopback) is when DNS returns an IPv6 address (::1) but the network isn't using IPv6. On Windows, this adds about 2 seconds to a connection attempt that should take under 100ms because .NET checks the address list sequentially ([issue](https://github.com/dotnet/runtime/issues/87932)).
+
 #### `Advanced.ThrowIfRunning`
 Typically, when the application is started without any command-line arguments, that instance will be the first one to start, and it just means the application's default settings should be used. If the application is started without switches and there is already another instance running (it is able to connect to the other instance's named pipe server), the new instance should terminate. This determines whether the new instance simply exits, or if it throws a `System.ArgumentException`. The default is true, an exception is thrown. If false, the library forcibly ends the process.
 

@@ -37,6 +37,21 @@ namespace CommandLineSwitchPipe
         public int UnsecuredPort { get; set; } = 0;
 
         /// <summary>
+        /// Default is 0, which is Unspecified, which in practice returns IPv4 and IPv6. On Windows
+        /// this can be slow if IPv6 is not used but DNS returns an IPv6 address anyway (particularly
+        /// for localhost). Currently .NET checks the IPs sequentially which can turn a 100ms localhost
+        /// request into a 2000+ms request. The setting corresponds to the .NET AddressFamily enum.
+        /// Specify 2 for IPv4 only, or 23 for IPv6 only.
+        /// </summary>
+        public int DnsAddressFamily { get; set; } = 0;
+
+        // Related issues, the above supposedly to be fixed in .NET9 by polling all addresses
+        // simultaneously (but not holding my breath, this problem goes back to .NET Core 2.1)
+        // https://github.com/dotnet/runtime/issues/87932
+        // https://github.com/dotnet/runtime/issues/26177
+        // https://github.com/dotnet/runtime/issues/31085
+
+        /// <summary>
         /// Typically, running an application with no switches is used to start the application with
         /// default settings. In that case, if an instance is already running, the new instance should
         /// exit. This is true by default, which generates a System.ArgumentException. If false, no

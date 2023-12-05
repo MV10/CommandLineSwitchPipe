@@ -1,9 +1,12 @@
 ﻿using CommandLineSwitchPipe;
+using System.Diagnostics;
 
 namespace tcpargs;
 
 internal class Program
 {
+    static Stopwatch timer = new();
+
     static async Task Main(string[] args)
     {
         int port = 0;
@@ -20,19 +23,32 @@ internal class Program
         Console.WriteLine("tcpargs: Forcing console logging for demo purposes.");
         CommandLineSwitchServer.Options.LogToConsole = true;
 
+        // 0 is default/unspecified; IPv4 is 2, IPv6 is 23. If connection attempts seem slow
+        // and your network doesn't use IPv6, uncomment this to ignore IPv6. See the repository
+        // README for details.
+        //CommandLineSwitchServer.Options.Advanced.DnsAddressFamily = 2; 
+
         Console.WriteLine($"tcpargs: Calling TryConnect for {server}:{port}.");
+        timer.Restart();
         if(!await CommandLineSwitchServer.TryConnect(server, port))
         {
-            Console.WriteLine("tcpargs: Failed to connect to server.");
+            timer.Stop();
+            Console.WriteLine($"tcpargs: Failed to connect to server. ({timer.ElapsedMilliseconds} ms)");
             return;
         }
+        timer.Stop();
+        Console.WriteLine($"tcpargs: Connected. ({timer.ElapsedMilliseconds} ms)");
 
         Console.WriteLine($"tcpargs: Sending {arguments.Length} args to TCP switch server.");
+        timer.Restart();
         if (!await CommandLineSwitchServer.TrySendArgs(arguments, server, port))
         {
-            Console.WriteLine("tcpargs: Failed to send arguments to server.");
+            timer.Stop();
+            Console.WriteLine($"tcpargs: Failed to send arguments to server. ({timer.ElapsedMilliseconds} ms)");
             return;
         }
+        timer.Stop();
+        Console.WriteLine($"tcpargs: Sent. ({timer.ElapsedMilliseconds} ms)");
 
         Console.WriteLine($"tcpargs: Response: {CommandLineSwitchServer.QueryResponse}");
     }
