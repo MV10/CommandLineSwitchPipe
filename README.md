@@ -16,13 +16,17 @@ I was asked to add support for remote named pipes, but that's a Windows-only fea
 
 Instead, version 1.1.0 adds a simple TCP-listener feature in the form of an `UnsecuredPort` option for the server (in the "advanced" group of settings), and optional `server` and `port` arguments to the `TryConnect` and `TrySend` methods. As the option name indicates, this is _**not**_ secure -- do not use this where the port might be visible to a public network. It tries to accept _anything_ that is sent to the port.
 
-Although this is somewhat re-inventing the wheel for Windows, this means it will seamlessly work exactly the same way for Linux -- or between Windows and Linux client/server combinations. Note that Windows will probably prompt you to add a firewall rule to allow the program to listen for TCP traffic.
+Although this is somewhat re-inventing the wheel for Windows, this means it will seamlessly work exactly the same way for Linux -- or between Windows and Linux client/server combinations (I have even used this in a .NET MAUI Android application). Note that Windows will probably prompt you to add a firewall rule to allow the program to listen for TCP traffic.
 
 The solution also contains a simple command-line utility in the `tcpargs` project, which can be used to remotely send an argument list to a given endpoint. This uses `TryConnect` and `TrySend` as a stand-alone client (in other words, it doesn't "take over" and start running if `TrySend` fails to locate an existing instance). The syntax is:
 
 * `tcpargs [server|localhost] [port] [arg1] [arg2] ... [argN]`
 
 Since the library is meant for very basic string exchanges, it does not adjust the default 8K send/receive buffer sizes. Only single-buffer read/write operations are supported, so any data larger than 8K (including minor overhead for separators and a data-length header) will cause an exception.
+
+You can see which ports are already in use on your system with this command:
+
+* `nestat -b -a -o | more`
 
 ## Usage and Demo
 
