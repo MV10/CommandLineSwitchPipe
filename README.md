@@ -24,7 +24,7 @@ The solution also contains a simple command-line utility in the `tcpargs` projec
 
 Since the library is meant for very basic string exchanges, it does not adjust the default 8K send/receive buffer sizes. Only single-buffer read/write operations are supported, so any data larger than 8K (including minor overhead for separators and a data-length header) will cause an exception.
 
-You can see which ports are already in use on your system with this command:
+Windows users can see which ports are already in use on your system with this command:
 
 * `nestat -b -a -o | more`
 
