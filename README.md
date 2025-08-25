@@ -1,6 +1,6 @@
 # CommandLineSwitchPipe [![NuGet](https://img.shields.io/nuget/v/CommandLineSwitchPipe.svg)](https://nuget.org/packages/CommandLineSwitchPipe)
 
-> _Version 1.1.0 added TCP support!_
+> Breaking change: v2.0.0 only accepts an `ILoggerFactory` (still optional), logging has been completely revised to be more "formally" correct. Log output is categorized as `CommandLineSwitchPipe` in all cases. No console output is produced unless the app's logger is configured for it.
 
 This library uses named pipes or TCP to pass command-line switches and arguments to a running service (implemented as a .NET console program) by simply running another instance of the same program with the additional arguments on the command-line. The running instance can return a string value in response.
 
@@ -68,11 +68,8 @@ For most applications, the default options are probably adequate. The console's 
 #### `PipeName`
 Determines the name of the pipe used to communicate command-line arguments. It is null by default, which tells the library to use the application name (or pathname, this is OS dependent).
 
-#### `Logger`
-When set to an `ILogger` object, all types of messages are written to the provided logging system. It is null by default, which suppresses log output.
-
-#### `LogToConsole`
-When set to true, activity and warning messages will be written to the console (stdout). It is false by default, since these messages are typically uninteresting to day-to-day utility users. Errors and critical (fatal) messages are always written to the console.
+#### `LoggerFactory`
+When set to an `ILoggerFactory` object, all types of messages are written to the provided logging system. It is null by default, which suppresses log output.
 
 #### `Advanced.UnsecuredPort`
 Zero by default, which disables the feature. If provided, the server will listen on the indicated TCP port. Anything received will be sent to the switch-handler delegate, and any response is sent back to the client over the same TCP connection.
@@ -94,6 +91,12 @@ This allows the named pipe server to auto-restart if a fatal exception is encoun
 
 #### `Advanced.LinuxWaitAfterWriteMS`
 On Windows, writing to a pipe is followed by the `WaitForPipeDrain` command, but this throws a "Platform Not Supported" exception on Linux. This provides a short asynchronous delay after a write operation (250ms by default) to allow the other end time to read the contents of the pipe stream.
+
+#### Obsolete: `Logger`
+_Removed after v1.1.4 in favor of `LoggerFactory` for proper log-output categorization._
+
+#### Obsolete: `LogToConsole`
+_Removed after v1.1.4 as the library consumer should configure the logger stack for console output if desired._
 
 #### Obsolete: `Advanced.MessageLogLevel`
 _Removed after v1.1.1, now all internal log levels are hard-coded._

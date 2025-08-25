@@ -34,11 +34,17 @@ namespace CommandLineSwitchPipe
         public static Exception TryException = null;
 
         /// <summary>
+        /// DO NOT USE THIS DIRECTLY.
+        /// It is created and used by the Log methods if Options.LoggerFactory is provided.
+        /// </summary>
+        private static ILogger Logger;
+
+        /// <summary>
         /// Returns true if another instance is already running.
         /// </summary>
         public static async Task<bool> TryConnect(string server = null, int port = 0)
         {
-            Output($"{nameof(TryConnect)} starting for PID {Environment.ProcessId}");
+            LogTrace($"{nameof(TryConnect)} starting for PID {Environment.ProcessId}");
             TryException = null;
             try
             {
@@ -50,7 +56,7 @@ namespace CommandLineSwitchPipe
             }
             catch (Exception ex)
             {
-                OutputException(ex);
+                LogException(ex);
                 TryException = ex;
                 return false;
             }
@@ -64,7 +70,7 @@ namespace CommandLineSwitchPipe
         /// </summary>
         public static async Task<bool> TrySendArgs(string[] args = null, string server = null, int port = 0)
         {
-            Output($"{nameof(TrySendArgs)} starting for PID {Environment.ProcessId}");
+            LogTrace($"{nameof(TrySendArgs)} starting for PID {Environment.ProcessId}");
             TryException = null;
             try
             {
@@ -80,7 +86,7 @@ namespace CommandLineSwitchPipe
                 if (args == null)
                     arguments = arguments.Length == 1 ? new string[0] : arguments[1..];
 
-                Output($"Switch list has {arguments.Length} elements");
+                LogTrace($"Switch list has {arguments.Length} elements");
 
                 // Send argument list with control-code separators
                 var message = string.Empty;
@@ -92,7 +98,7 @@ namespace CommandLineSwitchPipe
             }
             catch(Exception ex)
             {
-                OutputException(ex);
+                LogException(ex);
                 TryException = ex;
                 return false;
             }
@@ -124,12 +130,11 @@ namespace CommandLineSwitchPipe
                 {
                     using var server = new NamedPipeServerStream(PipeName(), PipeDirection.InOut, 1, PipeTransmissionMode.Byte, PipeOptions.Asynchronous);
 
-                    Output($"Switch server waiting for connection on namedpipe \"{PipeName()}\"");
+                    LogTrace($"Switch server waiting for connection on namedpipe \"{PipeName()}\"");
                     await server.WaitForConnectionAsync(cancellationToken).ConfigureAwait(false);
-                    Output(LogLevel.Trace, $"Switch server exited namedpipe {nameof(server.WaitForConnectionAsync)}");
+                    Log(LogLevel.Trace, $"Switch server exited namedpipe {nameof(server.WaitForConnectionAsync)}");
                     cancellationToken.ThrowIfCancellationRequested();
-                    OutputConsoleSeparator();
-                    Output("Switch client has connected to namedpipe server");
+                    LogTrace("Switch client has connected to namedpipe server");
 
                     var message = await ReadStringFromPipe(server);
 
@@ -139,7 +144,7 @@ namespace CommandLineSwitchPipe
                         var args = message.Split(Options.Advanced.SeparatorControlCode, StringSplitOptions.RemoveEmptyEntries);
 
                         // Process the switches, but prevent any handler exceptions from bringing down the server
-                        Output($"Invoking switch handler for {args.Length} switches");
+                        LogTrace($"Invoking switch handler for {args.Length} switches");
                         try
                         {
                             var response = switchHandler.Invoke(args) ?? string.Empty;
@@ -147,7 +152,7 @@ namespace CommandLineSwitchPipe
                         }
                         catch (Exception ex)
                         {
-                            Output(LogLevel.Warning, $"{ex.GetType().Name} trapped from switch handler");
+                            Log(LogLevel.Warning, $"{ex.GetType().Name} trapped from switch handler");
                         }
 
                         try
@@ -156,16 +161,16 @@ namespace CommandLineSwitchPipe
                             if(server.IsConnected)
                             {
                                 server.Disconnect();
-                                Output("Switch server terminated client namedpipe connection");
+                                LogTrace("Switch server terminated client namedpipe connection");
                             }
                             else
                             {
-                                Output("Switch server connection was terminated by namedpipe client");
+                                LogTrace("Switch server connection was terminated by namedpipe client");
                             }
                         }
                         catch (Exception ex)
                         {
-                            Output(LogLevel.Warning, $"{ex.GetType().Name} while trying to disconnect from namedpipe client");
+                            Log(LogLevel.Warning, $"{ex.GetType().Name} while trying to disconnect from namedpipe client");
                         }
                     }
                 }
@@ -174,29 +179,29 @@ namespace CommandLineSwitchPipe
             }
             catch (OperationCanceledException)
             {
-                Output(LogLevel.Trace, "Switch server namedpipe listener caught OperationCanceledException");
+                Log(LogLevel.Trace, "Switch server namedpipe listener caught OperationCanceledException");
                 ctsTCPServer.Cancel();
             }
             catch (Exception ex)
             {
-                OutputException(ex);
+                LogException(ex);
 
                 if(!cancellationToken.IsCancellationRequested && Options.Advanced.AutoRestartServer)
                 {
                     ctsTCPServer.Cancel();
-                    Output(LogLevel.Warning, "Restarting switch server task");
+                    Log(LogLevel.Warning, "Restarting switch server task");
                     _ = Task.Run(() => StartServer(switchHandler, cancellationToken), cancellationToken);
                 }
                 else
                 {
                     ctsTCPServer.Cancel();
-                    Output(LogLevel.Critical, $"Switch server forcibly terminating process in {nameof(StartServer)}");
+                    Log(LogLevel.Critical, $"Switch server forcibly terminating process in {nameof(StartServer)}");
                     Environment.Exit(-1);
                 }
             }
             finally
             {
-                Output("Switch server has stopped listening on namedpipe");
+                LogTrace("Switch server has stopped listening on namedpipe");
             }
         }
 
@@ -210,12 +215,11 @@ namespace CommandLineSwitchPipe
 
                 while (!cancellationToken.IsCancellationRequested)
                 {
-                    Output($"Switch server waiting for connection on TCP port {port}");
+                    LogTrace($"Switch server waiting for connection on TCP port {port}");
                     using var client = await server.AcceptTcpClientAsync(cancellationToken).ConfigureAwait(false);
-                    Output(LogLevel.Trace, $"Switch server exited TCP {nameof(server.AcceptTcpClientAsync)}");
+                    Log(LogLevel.Trace, $"Switch server exited TCP {nameof(server.AcceptTcpClientAsync)}");
                     cancellationToken.ThrowIfCancellationRequested();
-                    OutputConsoleSeparator();
-                    Output("Switch client has connected to TCP port");
+                    LogTrace("Switch client has connected to TCP port");
 
                     string activity = string.Empty;
                     try
@@ -229,7 +233,7 @@ namespace CommandLineSwitchPipe
                             var args = message.Split(Options.Advanced.SeparatorControlCode, StringSplitOptions.RemoveEmptyEntries);
 
                             // Process the switches
-                            Output($"Invoking switch handler for {args.Length} switches");
+                            LogTrace($"Invoking switch handler for {args.Length} switches");
                             activity = "invoking switch handler";
                             var response = switchHandler.Invoke(args) ?? string.Empty;
 
@@ -240,7 +244,7 @@ namespace CommandLineSwitchPipe
                     }
                     catch (Exception ex)
                     {
-                        Output(LogLevel.Warning, $"{ex.GetType().Name} trapped {activity}");
+                        Log(LogLevel.Warning, $"{ex.GetType().Name} trapped {activity}");
                     }
                     finally
                     {
@@ -251,33 +255,33 @@ namespace CommandLineSwitchPipe
             }
             catch (OperationCanceledException)
             {
-                Output(LogLevel.Trace, "Switch server TCP listener caught OperationCanceledException");
+                Log(LogLevel.Trace, "Switch server TCP listener caught OperationCanceledException");
             }
             catch (Exception ex)
             {
-                OutputException(ex);
+                LogException(ex);
 
                 if (!cancellationToken.IsCancellationRequested && Options.Advanced.AutoRestartServer)
                 {
-                    Output(LogLevel.Warning, "Restarting switch server TCP task");
+                    Log(LogLevel.Warning, "Restarting switch server TCP task");
                     _ = Task.Run(() => StartTCPServer(switchHandler, cancellationToken, port), cancellationToken);
                 }
                 else
                 {
-                    Output(LogLevel.Critical, $"Switch server forcibly terminating process in {nameof(StartTCPServer)}");
+                    Log(LogLevel.Critical, $"Switch server forcibly terminating process in {nameof(StartTCPServer)}");
                     Environment.Exit(-1);
                 }
             }
             finally
             {
                 server?.Stop();
-                Output("Switch server has stopped listening on TCP");
+                LogTrace("Switch server has stopped listening on TCP");
             }
         }
 
         private static async Task<bool> TryConnectLocalNamedPipe()
         {
-            Output(LogLevel.Trace, $"{nameof(TryConnectLocalNamedPipe)} invoked");
+            Log(LogLevel.Trace, $"{nameof(TryConnectLocalNamedPipe)} invoked");
 
             using var client = new NamedPipeClientStream(".", PipeName(), PipeDirection.InOut);
 
@@ -287,17 +291,17 @@ namespace CommandLineSwitchPipe
             }
             catch (TimeoutException)
             {
-                Output($"{nameof(TryConnectLocalNamedPipe)}: No running instance found");
+                LogTrace($"{nameof(TryConnectLocalNamedPipe)}: No running instance found");
                 return false;
             }
 
-            Output($"{nameof(TryConnectLocalNamedPipe)}: Running instance found");
+            LogTrace($"{nameof(TryConnectLocalNamedPipe)}: Running instance found");
             return true;
         }
 
         private static async Task<bool> TryConnectNetworkPort(string server, int port)
         {
-            Output(LogLevel.Trace, $"{nameof(TryConnectNetworkPort)}(server:{server}, port:{port}) invoked");
+            Log(LogLevel.Trace, $"{nameof(TryConnectNetworkPort)}(server:{server}, port:{port}) invoked");
 
             var addresses = await Dns.GetHostAddressesAsync(server, (AddressFamily)Options.Advanced.DnsAddressFamily, CancellationToken.None);
             if (addresses.Length == 0) throw new ArgumentException("Could not resolve address for host name");
@@ -311,21 +315,21 @@ namespace CommandLineSwitchPipe
             {
                 if(ex.SocketErrorCode == SocketError.ConnectionRefused)
                 {
-                    Output($"{nameof(TryConnectNetworkPort)}: No running instance found");
+                    LogTrace($"{nameof(TryConnectNetworkPort)}: No running instance found");
                     return false;
                 }
                 throw;
             }
 
-            Output($"{nameof(TryConnectNetworkPort)}: Running instance found");
+            LogTrace($"{nameof(TryConnectNetworkPort)}: Running instance found");
             return client.Connected;
         }
 
         private static async Task<bool> TrySendLocalNamedPipe(string message)
         {
-            Output(LogLevel.Trace, $"{nameof(TrySendLocalNamedPipe)} invoked");
+            Log(LogLevel.Trace, $"{nameof(TrySendLocalNamedPipe)} invoked");
 
-            Output($"Checking for a running instance on pipe \"{PipeName()}\"");
+            LogTrace($"Checking for a running instance on pipe \"{PipeName()}\"");
 
             using var client = new NamedPipeClientStream(".", PipeName(), PipeDirection.InOut);
 
@@ -335,44 +339,44 @@ namespace CommandLineSwitchPipe
             }
             catch (TimeoutException)
             {
-                Output($"No running instance found");
+                LogTrace($"No running instance found");
                 return false;
             }
 
-            Output($"Connected to switch pipe server");
+            LogTrace($"Connected to switch pipe server");
 
             // Connected, abort if we don't have arguments to pass
             if (string.IsNullOrEmpty(message))
             {
-                Output("No arguments to pass to the running instance.");
+                LogTrace("No arguments to pass to the running instance.");
 
                 if(Options.Advanced.ThrowIfRunning)
                     throw new ArgumentException("No arguments were provided to pass to the already-running instance");
 
-                Output("Not configured to throw an exception; forcing an exit");
+                LogTrace("Not configured to throw an exception; forcing an exit");
                 Environment.Exit(-1);
             }
 
-            Output("Sending switches to running instance");
+            LogTrace("Sending switches to running instance");
             await WriteStringToPipe(client, message).ConfigureAwait(false);
 
-            Output("Waiting for reply");
+            LogTrace("Waiting for reply");
             QueryResponse = await ReadStringFromPipe(client).ConfigureAwait(false);
-            Options.Logger?.Log(LogLevel.Debug, $"Received:\n{QueryResponse}");
+            Log(LogLevel.Debug, $"Received:\n{QueryResponse}");
 
-            Output($"Switches sent, PID {Environment.ProcessId} can terminate normally");
+            LogTrace($"Switches sent, PID {Environment.ProcessId} can terminate normally");
             return true;
         }
 
         private static async Task<bool> TrySendNetworkPort(string message, string server, int port)
         {
-            Output(LogLevel.Trace, $"{nameof(TrySendNetworkPort)} invoked");
+            Log(LogLevel.Trace, $"{nameof(TrySendNetworkPort)} invoked");
 
-            Output($"Checking for a running instance on server {server}:{port}");
+            LogTrace($"Checking for a running instance on server {server}:{port}");
 
             var addresses = await Dns.GetHostAddressesAsync(server, (AddressFamily)Options.Advanced.DnsAddressFamily, CancellationToken.None);
             if (addresses.Length == 0) throw new ArgumentException("Could not resolve address for host name");
-            Output($"Resolved {addresses.Length} addresses for server {server}");
+            LogTrace($"Resolved {addresses.Length} addresses for server {server}");
 
             using TcpClient client = new();
             try
@@ -383,48 +387,48 @@ namespace CommandLineSwitchPipe
             {
                 if (ex.SocketErrorCode == SocketError.ConnectionRefused)
                 {
-                    Output($"{nameof(TryConnectNetworkPort)}: No running instance found");
+                    LogTrace($"{nameof(TryConnectNetworkPort)}: No running instance found");
                     return false;
                 }
                 throw;
             }
             if (!client.Connected) throw new Exception("Failed to connect, but no framework exception was thrown");
 
-            Output($"Connected to switch pipe server");
+            LogTrace($"Connected to switch pipe server");
 
             // Connected, abort if we don't have arguments to pass
             if (string.IsNullOrEmpty(message))
             {
-                Output("No arguments to pass to the running instance.");
+                LogTrace("No arguments to pass to the running instance.");
 
                 if (Options.Advanced.ThrowIfRunning)
                     throw new ArgumentException("No arguments were provided to pass to the already-running instance");
 
-                Output("Not configured to throw an exception; forcing an exit");
+                LogTrace("Not configured to throw an exception; forcing an exit");
                 Environment.Exit(-1);
             }
 
-            Output("Sending switches to running instance");
+            LogTrace("Sending switches to running instance");
             await WriteStringToNetworkPort(client, message).ConfigureAwait(false);
 
-            Output("Waiting for reply");
+            LogTrace("Waiting for reply");
             QueryResponse = await ReadStringFromNetworkPort(client).ConfigureAwait(false);
-            Options.Logger?.Log(LogLevel.Debug, $"Received:\n{QueryResponse}");
+            Log(LogLevel.Debug, $"Received:\n{QueryResponse}");
 
-            Output($"Switches sent, PID {Environment.ProcessId} can terminate normally");
+            LogTrace($"Switches sent, PID {Environment.ProcessId} can terminate normally");
             return true;
         }
 
         private static async Task WriteStringToPipe(PipeStream stream, string message)
         {
-            Output(LogLevel.Trace, $"{nameof(WriteStringToPipe)} invoked");
+            Log(LogLevel.Trace, $"{nameof(WriteStringToPipe)} invoked");
 
             if (message.Length == 0) return;
 
             try
             {
                 var messageBuffer = Encoding.ASCII.GetBytes(message);
-                Output($"Sending {messageBuffer.Length} bytes");
+                LogTrace($"Sending {messageBuffer.Length} bytes");
 
                 var sizeBuffer = BitConverter.GetBytes(messageBuffer.Length);
                 await stream.WriteAsync(sizeBuffer, 0, sizeBuffer.Length).ConfigureAwait(false);
@@ -444,13 +448,13 @@ namespace CommandLineSwitchPipe
             }
             catch (Exception ex)
             {
-                Output(LogLevel.Warning, $"{ex.GetType().Name} while writing to PipeStream");
+                Log(LogLevel.Warning, $"{ex.GetType().Name} while writing to PipeStream");
             }
         }
 
         private static async Task<string> ReadStringFromPipe(PipeStream stream)
         {
-            Output(LogLevel.Trace, $"{nameof(ReadStringFromPipe)} invoked");
+            Log(LogLevel.Trace, $"{nameof(ReadStringFromPipe)} invoked");
 
             string response = string.Empty;
 
@@ -460,7 +464,7 @@ namespace CommandLineSwitchPipe
 
                 // Read the length of the message, then the message itself
                 var size = reader.ReadInt32();
-                Output($"Receiving {size} bytes");
+                LogTrace($"Receiving {size} bytes");
 
                 if (size > 0)
                 {
@@ -474,7 +478,7 @@ namespace CommandLineSwitchPipe
             { } // normal, disregard
             catch (Exception ex)
             {
-                Output(LogLevel.Warning, $"{ex.GetType().Name} while reading from PipeStream");
+                Log(LogLevel.Warning, $"{ex.GetType().Name} while reading from PipeStream");
             }
 
             return response;
@@ -482,7 +486,7 @@ namespace CommandLineSwitchPipe
 
         private static async Task WriteStringToNetworkPort(TcpClient client, string message)
         {
-            Output(LogLevel.Trace, $"{nameof(WriteStringToNetworkPort)} invoked");
+            Log(LogLevel.Trace, $"{nameof(WriteStringToNetworkPort)} invoked");
 
             if (string.IsNullOrEmpty(message)) return;
 
@@ -494,19 +498,19 @@ namespace CommandLineSwitchPipe
                 var minBuff = Math.Min(client.SendBufferSize, client.ReceiveBufferSize);
                 if (messageBuffer.Length > minBuff) throw new ArgumentException($"Message with delimiters exceeds {minBuff} byte buffer size");
 
-                Output($"Sending {messageBuffer.Length} bytes");
+                LogTrace($"Sending {messageBuffer.Length} bytes");
                 await stream.WriteAsync(messageBuffer, 0, messageBuffer.Length).ConfigureAwait(false);
                 await stream.FlushAsync().ConfigureAwait(false);
             }
             catch (Exception ex)
             {
-                Output(LogLevel.Warning, $"{ex.GetType().Name} while writing to NetworkStream");
+                Log(LogLevel.Warning, $"{ex.GetType().Name} while writing to NetworkStream");
             }
         }
 
         private static async Task<string> ReadStringFromNetworkPort(TcpClient client)
         {
-            Output(LogLevel.Trace, $"{nameof(ReadStringFromNetworkPort)} invoked");
+            Log(LogLevel.Trace, $"{nameof(ReadStringFromNetworkPort)} invoked");
 
             string response = string.Empty;
 
@@ -518,7 +522,7 @@ namespace CommandLineSwitchPipe
                 var messageBuffer = new byte[maxBuff];
                 var bytes = await stream.ReadAsync(messageBuffer, 0, maxBuff).ConfigureAwait(false);
                 await stream.FlushAsync().ConfigureAwait(false);
-                Output($"Received {bytes} bytes");
+                LogTrace($"Received {bytes} bytes");
 
                 response = Encoding.ASCII.GetString(messageBuffer, 0, bytes);
             }
@@ -526,7 +530,7 @@ namespace CommandLineSwitchPipe
             { } // normal, disregard
             catch (Exception ex)
             {
-                Output(LogLevel.Warning, $"{ex.GetType().Name} while reading from NetworkStream");
+                Log(LogLevel.Warning, $"{ex.GetType().Name} while reading from NetworkStream");
             }
 
             return response;
@@ -552,40 +556,32 @@ namespace CommandLineSwitchPipe
         private static void ValidatePortArgs(int port)
         {
             if (port < 1 || port > 65536) throw new ArgumentException("Invalid TCP port number");
-            if (port < 49151) Output(LogLevel.Warning, "TCP port numbers below 49152 may be reserved");
+            if (port < 49151) Log(LogLevel.Warning, "TCP port numbers below 49152 may be reserved");
         }
 
-        private static void Output(string message)
+        private static void Log(LogLevel logLevel, string message)
         {
-            Output(LogLevel.Debug, message);
+            if (Options.LoggerFactory is null) return;
+            if (Logger is null) Logger = Options.LoggerFactory.CreateLogger(nameof(CommandLineSwitchPipe));
+            Logger.Log(logLevel, message);
         }
 
-        private static void Output(LogLevel level, string message)
+        private static void LogTrace(string message)
         {
-            var msg = $"[{nameof(CommandLineSwitchPipe)} {DateTime.Now:yyyy-MM-dd HH:mm:ss.ffff}]: {message}";
-
-            if (Options.LogToConsole || level > LogLevel.Warning) 
-                Console.WriteLine(msg);
-
-            Options.Logger?.Log(level, msg);
+            Log(LogLevel.Trace, message);
         }
 
-        private static void OutputException(Exception ex)
+        private static void LogException(Exception ex)
         {
-            Output(LogLevel.Error, $"Exception {ex.GetType().Name}: {ex.Message}");
-            Output(LogLevel.Error, ex.StackTrace);
+            Log(LogLevel.Error, $"Exception {ex.GetType().Name}: {ex.Message}");
+            Log(LogLevel.Error, ex.StackTrace);
 
             var inner = ex.InnerException;
             while(inner is not null)
             {
-                Output(LogLevel.Error, $"Inner exception {ex.InnerException.GetType().Name}: {ex.InnerException.Message}");
+                Log(LogLevel.Error, $"Inner exception {ex.InnerException.GetType().Name}: {ex.InnerException.Message}");
                 inner = ex.InnerException;
             }
-        }
-
-        private static void OutputConsoleSeparator()
-        {
-            if (Options.LogToConsole) Console.WriteLine("\n".PadRight(70, '-'));
         }
     }
 }

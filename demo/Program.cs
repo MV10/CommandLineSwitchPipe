@@ -1,4 +1,5 @@
 ﻿using CommandLineSwitchPipe;
+using Microsoft.Extensions.Logging;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
@@ -24,9 +25,14 @@ namespace demo
             {
                 Output($"\nStarting PID {Environment.ProcessId}");
 
-                Output("Forcing console logging for demo purposes.");
+                Output("Using verbose/trace console logging for demo purposes.");
                 Output("Anything not prefixed by \"demo\" is logged by the library");
-                CommandLineSwitchServer.Options.LogToConsole = true;
+                using var loggerFactory = LoggerFactory.Create(config =>
+                { config
+                    .AddSimpleConsole(options => options.SingleLine = true)
+                    .SetMinimumLevel(LogLevel.Trace);
+                });
+                CommandLineSwitchServer.Options.LoggerFactory = loggerFactory;
 
                 Output("Disabling ArgumentException if secondary instance started without arguments.\n\n");
                 CommandLineSwitchServer.Options.Advanced.ThrowIfRunning = false;

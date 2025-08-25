@@ -1,4 +1,5 @@
 ﻿using CommandLineSwitchPipe;
+using Microsoft.Extensions.Logging;
 using System.Diagnostics;
 
 namespace tcpargs;
@@ -20,8 +21,14 @@ internal class Program
         string server = args[0];
         var arguments = args[2..];
 
-        Console.WriteLine("tcpargs: Forcing console logging for demo purposes.");
-        CommandLineSwitchServer.Options.LogToConsole = true;
+        Console.WriteLine("tcpargs: Using verbose/trace console logging for demo purposes.");
+        using var loggerFactory = LoggerFactory.Create(config =>
+        {
+            config
+            .AddSimpleConsole(options => options.SingleLine = true)
+            .SetMinimumLevel(LogLevel.Trace);
+        });
+        CommandLineSwitchServer.Options.LoggerFactory = loggerFactory;
 
         // 0 is default/unspecified; IPv4 is 2, IPv6 is 23. If connection attempts seem slow
         // and your network doesn't use IPv6, uncomment this to ignore IPv6. See the repository

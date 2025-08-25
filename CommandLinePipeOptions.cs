@@ -2,6 +2,9 @@
 
 namespace CommandLineSwitchPipe
 {
+    /// <summary>
+    /// Library settings.
+    /// </summary>
     public class CommandLinePipeOptions
     {
         /// <summary>
@@ -11,14 +14,9 @@ namespace CommandLineSwitchPipe
         public string PipeName { get; set; } = null;
 
         /// <summary>
-        /// Optional log writer.
+        /// Optional log factory.
         /// </summary>
-        public ILogger Logger { get; set; } = null;
-
-        /// <summary>
-        /// Messages are written to stdout when true. Default is false.
-        /// </summary>
-        public bool LogToConsole { get; set; } = false;
+        public ILoggerFactory LoggerFactory { get; set; } = null;
 
         /// <summary>
         /// Settings for which the defaults are normally adequate.
@@ -26,6 +24,9 @@ namespace CommandLineSwitchPipe
         public AdvancedOptions Advanced { get; set; } = new AdvancedOptions();
     }
 
+    /// <summary>
+    /// Library settings.
+    /// </summary>
     public class AdvancedOptions
     {
         /// <summary>
