@@ -2,6 +2,8 @@
 
 > Breaking change: v2.0.0 only accepts an `ILoggerFactory` (still optional), logging has been completely revised to be more "formally" correct. Log output is categorized as `CommandLineSwitchPipe` in all cases. No console output is produced unless the app's logger is configured for it.
 
+> v2.0.1 adds .NET 10 support as well as .NET 8 (no code changes).
+
 This library uses named pipes or TCP to pass command-line switches and arguments to a running service (implemented as a .NET console program) by simply running another instance of the same program with the additional arguments on the command-line. The running instance can return a string value in response.
 
 At startup, the program tries to find another instance that was started earlier by attempting to connect to the named pipe server. If the server is found, any command-line arguments are sent to the existing instance, and the new instance should then terminate.
