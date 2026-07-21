@@ -2,7 +2,7 @@
 
 > Breaking change: v2.0.0 only accepts an `ILoggerFactory` (still optional), logging has been completely revised to be more "formally" correct. Log output is categorized as `CommandLineSwitchPipe` in all cases. No console output is produced unless the app's logger is configured for it.
 
-> v2.0.1 adds .NET 10 support (no code changes).
+> v2.0.1 added .NET 10 support (no code changes), and .NET 8 is still supported.
 
 This library uses named pipes or TCP to pass command-line switches and arguments to a running service (implemented as a .NET console program) by simply running another instance of the same program with the additional arguments on the command-line. The running instance can return a string value in response.
 
@@ -12,9 +12,11 @@ If another instance is not found, that instance can become the running service b
 
 Although the included demo should be run using two console windows, this is useful in the real world for communicating with always-running background services. I recently had a need to run a Kestrel-based WebSocket server this way. This approach works as either a [Windows service](https://docs.microsoft.com/en-us/aspnet/core/host-and-deploy/windows-service?view=aspnetcore-3.1&tabs=visual-studio) or as a [Linux systemd service](https://docs.microsoft.com/en-us/aspnet/core/host-and-deploy/linux-nginx?view=aspnetcore-3.1#create-the-service-file).
 
+> There is _no_ security on the named pipes. Anyone or any process can connect to it, by design. If you need identity or other security, that's up to you, the protocol for the actual data is in your control (you could require an OIDC token, as one possible example).
+
 ## Network Support
 
-I was asked to add support for remote named pipes, but that's a Windows-only feature, and I want the library to remain cross-platform. (Named pipes originated on UNIX, and there it is specifically defined as local-only IPC which is closely tied to the file system.)
+I was asked to add support for _remote_ named pipes, but that's a Windows-only feature, and I want the library to remain cross-platform. (Named pipes originated on UNIX, and there it is specifically defined as local-only IPC which is closely tied to the file system.)
 
 Instead, version 1.1.0 adds a simple TCP-listener feature in the form of an `UnsecuredPort` option for the server (in the "advanced" group of settings), and optional `server` and `port` arguments to the `TryConnect` and `TrySend` methods. As the option name indicates, this is _**not**_ secure -- do not use this where the port might be visible to a public network. It tries to accept _anything_ that is sent to the port.
 
@@ -24,11 +26,12 @@ The solution also contains a simple command-line utility in the `tcpargs` projec
 
 * `tcpargs [server|localhost] [port] [arg1] [arg2] ... [argN]`
 
-Since the library is meant for very basic string exchanges, it does not adjust the default 8K send/receive buffer sizes. Only single-buffer read/write operations are supported, so any data larger than 8K (including minor overhead for separators and a data-length header) will cause an exception.
+Since the library is meant for very basic string exchanges, it does not adjust TCP's default 8K send/receive buffer sizes. Only single-buffer read/write operations are supported, so any data larger than 8K (including minor overhead for separators and a data-length header) will cause an exception.
 
-You can see which ports are already in use on your system with this command:
+You can see which ports are already in use:
 
-* `nestat -b -a -o | more`
+* Windows: `nestat -b -a -o | more`
+* Linux: `ss -tulnap | more`
 
 ## Usage and Demo
 
@@ -68,7 +71,7 @@ However, the demo does not have a way to send the switches over the network, as 
 For most applications, the default options are probably adequate. The console's `Main` method can programmatically set properties on the `CommandLineSwitchServer.Options` property, or they can be populated by the .NET configuration extension packages.
 
 #### `PipeName`
-Determines the name of the pipe used to communicate command-line arguments. It is null by default, which tells the library to use the application name (or pathname, this is OS dependent).
+Determines the name of the pipe used to communicate command-line arguments. It is null by default, which tells the library to generate a name (typically this is the filename plus a pathname hash which should guarantee uniqueness, but the actual results may be OS-dependent).
 
 #### `LoggerFactory`
 When set to an `ILoggerFactory` object, all types of messages are written to the provided logging system. It is null by default, which suppresses log output.

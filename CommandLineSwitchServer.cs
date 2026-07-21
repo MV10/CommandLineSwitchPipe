@@ -5,6 +5,10 @@ using System.IO.Pipes;
 using System.Net;
 using System.Net.Sockets;
 using System.Runtime.InteropServices;
+using System.Runtime.Versioning;
+using System.Security.AccessControl;
+using System.Security.Cryptography;
+using System.Security.Principal;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -128,7 +132,7 @@ public static class CommandLineSwitchServer
 
             while (!cancellationToken.IsCancellationRequested)
             {
-                using var server = new NamedPipeServerStream(PipeName(), PipeDirection.InOut, 1, PipeTransmissionMode.Byte, PipeOptions.Asynchronous);
+                using var server = CreatePipeServer();
 
                 LogTrace($"Switch server waiting for connection on namedpipe \"{PipeName()}\"");
                 await server.WaitForConnectionAsync(cancellationToken).ConfigureAwait(false);
@@ -536,8 +540,88 @@ public static class CommandLineSwitchServer
         return response;
     }
 
+    // The library deliberately imposes no access control -- any local user can connect and send
+    // switches, and the receiving application decides whether to honor them. That intent is not
+    // what either OS does by default. Windows gives the pipe the creating token's default DACL,
+    // which excludes ordinary users when the server runs as a service, and .NET on Linux and MacOS
+    // creates the underlying socket subject to the process umask. Both are opened up here so that
+    // the documented behavior is the actual behavior.
+    private static NamedPipeServerStream CreatePipeServer()
+    {
+        if (OperatingSystem.IsWindows()) return CreateWindowsPipeServer();
+
+        var server = new NamedPipeServerStream(PipeName(), PipeDirection.InOut, 1, PipeTransmissionMode.Byte, PipeOptions.Asynchronous);
+
+        // Named pipes are Unix domain sockets here, and connecting to one requires write permission.
+        // The socket pathname is an implementation detail of the runtime, but a stable one -- the
+        // runtime cannot change it without breaking version-to-version connectivity.
+        try
+        {
+            var pathname = Path.IsPathRooted(PipeName())
+                ? PipeName()
+                : Path.Combine(Path.GetTempPath(), $"CoreFxPipe_{PipeName()}");
+
+            File.SetUnixFileMode(pathname,
+                UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute
+                | UnixFileMode.GroupRead | UnixFileMode.GroupWrite | UnixFileMode.GroupExecute
+                | UnixFileMode.OtherRead | UnixFileMode.OtherWrite | UnixFileMode.OtherExecute);
+
+            LogTrace($"Namedpipe socket \"{pathname}\" opened to all users");
+        }
+        catch (Exception ex)
+        {
+            // Not fatal, the pipe still works -- it may just be unreachable by other users
+            Log(LogLevel.Warning, $"{ex.GetType().Name} setting namedpipe socket permissions, other users may be unable to connect");
+        }
+
+        return server;
+    }
+
+    [SupportedOSPlatform("windows")]
+    private static NamedPipeServerStream CreateWindowsPipeServer()
+    {
+        var security = new PipeSecurity();
+
+        // An explicit DACL replaces the token default entirely, so the owner has to be re-granted
+        // the rights it would otherwise have had, including creating further pipe instances
+        using (var identity = WindowsIdentity.GetCurrent())
+            security.AddAccessRule(new PipeAccessRule(identity.Owner, PipeAccessRights.FullControl, AccessControlType.Allow));
+
+        security.AddAccessRule(new PipeAccessRule(
+            new SecurityIdentifier(WellKnownSidType.WorldSid, null), PipeAccessRights.ReadWrite, AccessControlType.Allow));
+
+        LogTrace("Namedpipe opened to all users");
+
+        return NamedPipeServerStreamAcl.Create(PipeName(), PipeDirection.InOut, 1, PipeTransmissionMode.Byte, PipeOptions.Asynchronous, 0, 0, security);
+    }
+
     private static string PipeName()
-        => string.IsNullOrWhiteSpace(Options.PipeName) ? Environment.GetCommandLineArgs()[0] : Options.PipeName;
+        => string.IsNullOrWhiteSpace(Options.PipeName) ? DefaultPipeName() : Options.PipeName;
+
+    // The default is the application filename plus a short hash of the full pathname. Prior to
+    // v2.0.2 the raw pathname was used, which is destructive on Linux and MacOS: .NET backs named
+    // pipes with Unix domain sockets, a rooted pipe name is used verbatim as the socket pathname,
+    // and the runtime unlinks whatever is already there -- silently deleting the application's own
+    // assembly. Hashing the pathname retains its uniqueness, so that separate installations of the
+    // same program (production and staging, for example) still get separate pipes.
+    private static string DefaultPipeName()
+    {
+        var pathname = Environment.GetCommandLineArgs()[0];
+        if (string.IsNullOrWhiteSpace(pathname)) pathname = nameof(CommandLineSwitchPipe);
+
+        // Windows pathnames are case-insensitive, Linux and MacOS pathnames are not
+        var hashable = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? pathname.ToLowerInvariant() : pathname;
+
+        // Not string.GetHashCode, which is randomized per-process, meaning the client and the
+        // server would derive different names. This only has to be stable and short, not secure.
+        var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(hashable)), 0, 4);
+
+        // Truncated because Unix domain socket pathnames are limited to about 100 characters
+        var filename = Path.GetFileName(pathname);
+        if (filename.Length > 32) filename = filename[..32];
+
+        return $"{filename}_{hash}";
+    }
 
     private static void ValidateNetworkArgs(string server, int port)
     {
