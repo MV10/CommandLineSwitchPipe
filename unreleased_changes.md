@@ -9,6 +9,9 @@
 * Guarantee named pipes do not have access restrictions (by design, see README)
 * Filed .NET runtime bug reports ([131200](https://github.com/dotnet/runtime/issues/131200) and [131203](https://github.com/dotnet/runtime/issues/131203))
 
+#### v2.1.0 2026-07-21
+* Add `Options.Advanced.Encoding`, defaults to `Encoding.ASCII` (non-breaking change)
+
 ### TODO
 
 * 
