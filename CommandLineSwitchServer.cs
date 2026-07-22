@@ -431,7 +431,7 @@ public static class CommandLineSwitchServer
 
         try
         {
-            var messageBuffer = Encoding.ASCII.GetBytes(message);
+            var messageBuffer = Options.Advanced.Encoding.GetBytes(message);
             LogTrace($"Sending {messageBuffer.Length} bytes");
 
             var sizeBuffer = BitConverter.GetBytes(messageBuffer.Length);
@@ -464,7 +464,7 @@ public static class CommandLineSwitchServer
 
         try
         {
-            using var reader = new BinaryReader(stream, Encoding.ASCII, leaveOpen: true);
+            using var reader = new BinaryReader(stream, Options.Advanced.Encoding, leaveOpen: true);
 
             // Read the length of the message, then the message itself
             var size = reader.ReadInt32();
@@ -473,7 +473,7 @@ public static class CommandLineSwitchServer
             if (size > 0)
             {
                 var buffer = reader.ReadBytes(size);
-                response = Encoding.ASCII.GetString(buffer);
+                response = Options.Advanced.Encoding.GetString(buffer);
             }
 
             await stream.FlushAsync().ConfigureAwait(false);
@@ -498,7 +498,7 @@ public static class CommandLineSwitchServer
         {
             var stream = client.GetStream();
 
-            var messageBuffer = Encoding.ASCII.GetBytes(message);
+            var messageBuffer = Options.Advanced.Encoding.GetBytes(message);
             var minBuff = Math.Min(client.SendBufferSize, client.ReceiveBufferSize);
             if (messageBuffer.Length > minBuff) throw new ArgumentException($"Message with delimiters exceeds {minBuff} byte buffer size");
 
@@ -528,7 +528,7 @@ public static class CommandLineSwitchServer
             await stream.FlushAsync().ConfigureAwait(false);
             LogTrace($"Received {bytes} bytes");
 
-            response = Encoding.ASCII.GetString(messageBuffer, 0, bytes);
+            response = Options.Advanced.Encoding.GetString(messageBuffer, 0, bytes);
         }
         catch (EndOfStreamException)
         { } // normal, disregard

@@ -2,7 +2,7 @@
 
 > Breaking change: v2.0.0 only accepts an `ILoggerFactory` (still optional), logging has been completely revised to be more "formally" correct. Log output is categorized as `CommandLineSwitchPipe` in all cases. No console output is produced unless the app's logger is configured for it.
 
-> v2.0.1 added .NET 10 support (no code changes), and .NET 8 is still supported.
+Supports .NET 8 and .NET 10.
 
 This library uses named pipes or TCP to pass command-line switches and arguments to a running service (implemented as a .NET console program) by simply running another instance of the same program with the additional arguments on the command-line. The running instance can return a string value in response.
 
@@ -98,6 +98,9 @@ This allows the named pipe server to auto-restart if a fatal exception is encoun
 
 #### `Advanced.LinuxWaitAfterWriteMS`
 On Windows, writing to a pipe is followed by the `WaitForPipeDrain` command, but this throws a "Platform Not Supported" exception on Linux. This provides a short asynchronous delay after a write operation (250ms by default) to allow the other end time to read the contents of the pipe stream.
+
+#### `Advanced.Encoding`
+This accepts any .NET [`Encoding`](https://learn.microsoft.com/en-us/dotnet/api/system.text.encoding?view=net-10.0#properties) value (oddly these are properties rather than an enum). The default is `Encoding.ASCII` which was the non-configurable internal setting prior to version 2.1.0. Using something like `Encoding.UTF8` allows most foreign-language characters to work seamlessly. It applies to both the named pipe and the unsecured TCP port. Both ends must use the same setting.
 
 #### Obsolete: `Logger`
 _Removed after v1.1.4 in favor of `LoggerFactory` for proper log-output categorization._

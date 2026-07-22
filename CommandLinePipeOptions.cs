@@ -1,4 +1,5 @@
 ﻿using Microsoft.Extensions.Logging;
+using System.Text;
 
 namespace CommandLineSwitchPipe;
 
@@ -82,4 +83,13 @@ public class AdvancedOptions
     /// applied to give the other end time to read the contents. Default is 250ms.
     /// </summary>
     public int LinuxWaitAfterWriteMS { get; set; } = 250;
+
+    /// <summary>
+    /// Encoding applied to messages sent and received over the named pipe or the unsecured TCP
+    /// port. Defaults to Encoding.ASCII, which silently replaces any non-ASCII character with a
+    /// question mark. Specify Encoding.UTF8 if the application transmits non-ASCII content such
+    /// as file paths or command lines. Both ends must agree; a mismatch produces garbled text
+    /// rather than an exception, which is why the default is unchanged from earlier versions.
+    /// </summary>
+    public Encoding Encoding { get; set; } = Encoding.ASCII;
 }
