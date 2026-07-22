@@ -73,10 +73,33 @@ public class AdvancedOptions
     public string SeparatorControlCode { get; set; } = "\u0014";
 
     /// <summary>
-    /// If the server thread encounters a fatal exception, it can auto-restart if this is true. Default is false,
-    /// an exception will be logged and the process will be forcibly terminated.
+    /// If a listener encounters a fatal exception, it can auto-restart if this is true. Default is false, the
+    /// exception will be logged and the failure is handled according to ExitOnServerFailure. As of v2.2.0 this
+    /// only applies after a listener has been successfully established; a failed initial attempt is always
+    /// terminal. The named pipe server and the optional TCP listener restart independently.
     /// </summary>
     public bool AutoRestartServer { get; set; } = false;
+
+    /// <summary>
+    /// Time in milliseconds to wait to attempt a server restart. Ignored when AutoRestartServer is false.
+    /// </summary>
+    public int AutoRestartDelay { get; set; } = 5000;
+
+    /// <summary>
+    /// Number of times to attempt server restart before the failure is considered terminal. Set to zero for
+    /// unlimited attempts. The count is reset when a restarted listener accepts a connection, so failures
+    /// separated by long periods of normal operation are not accumulated. Ignored when AutoRestartServer is false.
+    /// </summary>
+    public int AutoRestartAttempts { get; set; } = 3;
+
+    /// <summary>
+    /// Determines how a terminal server failure is reported. A failure is terminal when the initial attempt to
+    /// establish a listener fails, when AutoRestartServer is false, or when the restart attempts are exhausted.
+    /// Default is true, which logs a Critical message and forcibly terminates the process, matching the behavior
+    /// of versions prior to v2.2.0. When false, the exception is re-thrown from StartServer instead, which
+    /// requires the application to await or otherwise observe the Task returned by StartServer.
+    /// </summary>
+    public bool ExitOnServerFailure { get; set; } = true;
 
     /// <summary>
     /// Linux does not support WaitForPipeDrain on writes, so a short delay can be

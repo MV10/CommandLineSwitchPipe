@@ -9,12 +9,17 @@
 * Guarantee named pipes do not have access restrictions (by design, see README)
 * Filed .NET runtime bug reports ([131200](https://github.com/dotnet/runtime/issues/131200) and [131203](https://github.com/dotnet/runtime/issues/131203))
 
-#### v2.1.0 2026-07-21
+#### v2.2.0 2026-07-22
 * Add `Options.Advanced.Encoding`, defaults to `Encoding.ASCII` (non-breaking change)
+* Refactor internal design to a loop rather than spawning new threads on server restarts
+* Change auto-restart to only apply if the initial attempt succeeds
+* Add `Options.Advanced.ExitOnServerFailure` default true maintains pre-2.2.0 behavior, false re-throws
+* Add `Options.Advanced.AutoRestartDelay` in milliseconds (default is 5000)
+* Add `Options.Advanced.AutoRestartAttempts` (default is 3)
 
 ### TODO
 
-* 
+*
 
 
 

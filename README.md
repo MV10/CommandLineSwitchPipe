@@ -2,6 +2,8 @@
 
 > Breaking change: v2.0.0 only accepts an `ILoggerFactory` (still optional), logging has been completely revised to be more "formally" correct. Log output is categorized as `CommandLineSwitchPipe` in all cases. No console output is produced unless the app's logger is configured for it.
 
+> Breaking change: v2.2.0 alters auto-restart behavior. Auto-restart first requires that the _initial_ attempt to establish a listener succeeds; an initial failure is always terminal. This version also adds a configurable delay between restart attempts (default is 5 seconds), a maximum retry threshold (default is 3 attempts), and the `ExitOnServerFailure` option, which can re-throw a terminal failure instead of forcibly ending the process. The named pipe server and the optional TCP listener now restart independently of one another.
+
 Supports .NET 8 and .NET 10.
 
 This library uses named pipes or TCP to pass command-line switches and arguments to a running service (implemented as a .NET console program) by simply running another instance of the same program with the additional arguments on the command-line. The running instance can return a string value in response.
@@ -52,6 +54,7 @@ The demo program should be relatively easy to follow (and the new TCP client is 
   * These indicate a "normal" no-server-running condition
 * Absent an exception, this instance can assume the role of the running service:
   * Use `Task.Run` to invoke `StartServer` on a separate thread
+  * If `Advanced.ExitOnServerFailure` is false, retain and observe the returned `Task`, otherwise a terminal server failure is silently discarded
   * Process any command-line arguments used to start this instance
   * Do whatever work the application should normally perform
   * When the application should exit, cancel the token provided to `StartServer`
@@ -94,7 +97,16 @@ The number of milliseconds to wait for a named pipe server to respond. This defa
 Defines the character used to separate the command-line arguments when they are sent to the already-running instance. Defaults to character 14 (0x0E), which is the Record Separator (RS) control code.
 
 #### `Advanced.AutoRestartServer`
-This allows the named pipe server to auto-restart if a fatal exception is encountered. This defaults to false, since the server has relatively robust exception handling and should gracefully recover from routine communications issues like a problem on the client side or an exception that bubbles up from the switch-handler delegate.
+This allows the named pipe server and the optional TCP listener to auto-restart if a fatal exception is encountered. This defaults to false, since the server has relatively robust exception handling and should gracefully recover from routine communications issues like a problem on the client side or an exception that bubbles up from the switch-handler delegate. As of version 2.2.0 this only applies after a listener has been successfully established. If the initial attempt fails, the failure is terminal and is reported according to `Advanced.ExitOnServerFailure`. The two listeners restart independently and track their own retry counts.
+
+#### `Advanced.AutoRestartDelay`
+Time in milliseconds to wait before attempting a server restart (5000ms by default). This is ignored when `Advanced.AutoRestartServer` is false.
+
+#### `Advanced.AutoRestartAttempts`
+Number of times to attempt a server restart before the failure is considered terminal (3 attempts by default). Set to zero to allow unlimited attempts. The count resets after a restarted listener successfully accepts a connection, so failures separated by long periods of normal operation are not accumulated. This is ignored when `Advanced.AutoRestartServer` is false.
+
+#### `Advanced.ExitOnServerFailure`
+Determines how a terminal server failure is reported. A failure is terminal when the initial attempt to establish a listener fails, when `Advanced.AutoRestartServer` is false, or when the restart attempts have been exhausted. The default is true, which logs a `Critical` message and forcibly ends the process, matching the behavior of versions prior to 2.2.0. When false, the exception is re-thrown from `StartServer` instead, which is useful when the application manages its own shutdown, such as a Windows Service or a .NET generic host. This applies to the named pipe server and the optional TCP listener alike, and a terminal failure of either one stops both. Because `StartServer` returns a `Task`, the application must await or otherwise observe it to receive the exception.
 
 #### `Advanced.LinuxWaitAfterWriteMS`
 On Windows, writing to a pipe is followed by the `WaitForPipeDrain` command, but this throws a "Platform Not Supported" exception on Linux. This provides a short asynchronous delay after a write operation (250ms by default) to allow the other end time to read the contents of the pipe stream.

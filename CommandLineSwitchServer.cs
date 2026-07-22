@@ -4,6 +4,7 @@ using System.IO;
 using System.IO.Pipes;
 using System.Net;
 using System.Net.Sockets;
+using System.Runtime.ExceptionServices;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using System.Security.AccessControl;
@@ -114,7 +115,18 @@ public static class CommandLineSwitchServer
     /// </summary>
     public static async Task StartServer(Func<string[], string> switchHandler, CancellationToken cancellationToken, int port = 0)
     {
-        CancellationTokenSource ctsTCPServer = new();
+        // Cancelled by the caller for a normal shutdown, or by either listener when it fails terminally
+        using CancellationTokenSource ctsListeners = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+
+        ExceptionDispatchInfo failure = null;
+        Task tcpListener = null;
+
+        // Whichever listener fails first is the one reported; the other is stopped by the cancellation
+        void ReportTerminalFailure(Exception ex)
+        {
+            Interlocked.CompareExchange(ref failure, ExceptionDispatchInfo.Capture(ex), null);
+            ctsListeners.Cancel();
+        }
 
         try
         {
@@ -127,18 +139,71 @@ public static class CommandLineSwitchServer
             if (port != 0)
             {
                 ValidatePortArgs(port);
-                _ = Task.Run(() => StartTCPServer(switchHandler, ctsTCPServer.Token, port), ctsTCPServer.Token);
+                tcpListener = Task.Run(() => StartTCPServer(switchHandler, ctsListeners.Token, port, ReportTerminalFailure), ctsListeners.Token);
             }
 
-            while (!cancellationToken.IsCancellationRequested)
+            await ListenOnNamedPipe(switchHandler, ctsListeners.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            Log(LogLevel.Trace, "Switch server namedpipe listener caught OperationCanceledException");
+        }
+        catch (Exception ex)
+        {
+            LogException(ex);
+            ReportTerminalFailure(ex);
+        }
+        finally
+        {
+            ctsListeners.Cancel();
+
+            if (tcpListener != null)
+            {
+                try
+                {
+                    await tcpListener.ConfigureAwait(false);
+                }
+                catch (OperationCanceledException)
+                { }
+                catch (Exception ex)
+                {
+                    LogException(ex);
+                }
+            }
+
+            LogTrace("Switch server has stopped listening on namedpipe");
+        }
+
+        if (failure != null)
+        {
+            // Advanced options can be missing here, and the pre-v2.2.0 behavior was to terminate
+            if (Options?.Advanced?.ExitOnServerFailure ?? true)
+            {
+                Log(LogLevel.Critical, $"Switch server forcibly terminating process in {nameof(StartServer)}");
+                Environment.Exit(-1);
+            }
+
+            failure.Throw();
+        }
+    }
+
+    private static async Task ListenOnNamedPipe(Func<string[], string> switchHandler, CancellationToken cancellationToken)
+    {
+        RestartTracker tracker = new();
+
+        while (!cancellationToken.IsCancellationRequested)
+        {
+            try
             {
                 using var server = CreatePipeServer();
+                tracker.Established = true;
 
                 LogTrace($"Switch server waiting for connection on namedpipe \"{PipeName()}\"");
                 await server.WaitForConnectionAsync(cancellationToken).ConfigureAwait(false);
                 Log(LogLevel.Trace, $"Switch server exited namedpipe {nameof(server.WaitForConnectionAsync)}");
                 cancellationToken.ThrowIfCancellationRequested();
                 LogTrace("Switch client has connected to namedpipe server");
+                tracker.Restarts = 0;
 
                 var message = await ReadStringFromPipe(server);
 
@@ -178,109 +243,135 @@ public static class CommandLineSwitchServer
                     }
                 }
             }
-
-            ctsTCPServer.Cancel();
-        }
-        catch (OperationCanceledException)
-        {
-            Log(LogLevel.Trace, "Switch server namedpipe listener caught OperationCanceledException");
-            ctsTCPServer.Cancel();
-        }
-        catch (Exception ex)
-        {
-            LogException(ex);
-
-            if(!cancellationToken.IsCancellationRequested && Options.Advanced.AutoRestartServer)
+            catch (OperationCanceledException)
             {
-                ctsTCPServer.Cancel();
-                Log(LogLevel.Warning, "Restarting switch server task");
-                _ = Task.Run(() => StartServer(switchHandler, cancellationToken), cancellationToken);
+                // Shutdown is not a restartable failure
+                throw;
             }
-            else
+            catch (Exception ex)
             {
-                ctsTCPServer.Cancel();
-                Log(LogLevel.Critical, $"Switch server forcibly terminating process in {nameof(StartServer)}");
-                Environment.Exit(-1);
+                if (await TryRestartListener("namedpipe", ex, tracker, cancellationToken).ConfigureAwait(false)) continue;
+                if (cancellationToken.IsCancellationRequested) return;
+                throw;
             }
-        }
-        finally
-        {
-            LogTrace("Switch server has stopped listening on namedpipe");
         }
     }
 
-    private static async Task StartTCPServer(Func<string[], string> switchHandler, CancellationToken cancellationToken, int port)
+    private static async Task StartTCPServer(Func<string[], string> switchHandler, CancellationToken cancellationToken, int port, Action<Exception> reportTerminalFailure)
     {
-        TcpListener server = null;
+        RestartTracker tracker = new();
+
         try
         {
-            server = new TcpListener(IPAddress.Any, port);
-            server.Start(); // This merely queues connection requests
-
             while (!cancellationToken.IsCancellationRequested)
             {
-                LogTrace($"Switch server waiting for connection on TCP port {port}");
-                using var client = await server.AcceptTcpClientAsync(cancellationToken).ConfigureAwait(false);
-                Log(LogLevel.Trace, $"Switch server exited TCP {nameof(server.AcceptTcpClientAsync)}");
-                cancellationToken.ThrowIfCancellationRequested();
-                LogTrace("Switch client has connected to TCP port");
+                TcpListener server = null;
 
-                string activity = string.Empty;
                 try
                 {
-                    activity = "reading data from TCP client";
-                    var message = await ReadStringFromNetworkPort(client);
+                    server = new TcpListener(IPAddress.Any, port);
+                    server.Start(); // This merely queues connection requests
+                    tracker.Established = true;
 
-                    if (!string.IsNullOrWhiteSpace(message))
+                    while (!cancellationToken.IsCancellationRequested)
                     {
-                        // Split into original arg array
-                        var args = message.Split(Options.Advanced.SeparatorControlCode, StringSplitOptions.RemoveEmptyEntries);
+                        LogTrace($"Switch server waiting for connection on TCP port {port}");
+                        using var client = await server.AcceptTcpClientAsync(cancellationToken).ConfigureAwait(false);
+                        Log(LogLevel.Trace, $"Switch server exited TCP {nameof(server.AcceptTcpClientAsync)}");
+                        cancellationToken.ThrowIfCancellationRequested();
+                        LogTrace("Switch client has connected to TCP port");
+                        tracker.Restarts = 0;
 
-                        // Process the switches
-                        LogTrace($"Invoking switch handler for {args.Length} switches");
-                        activity = "invoking switch handler";
-                        var response = switchHandler.Invoke(args) ?? string.Empty;
+                        string activity = string.Empty;
+                        try
+                        {
+                            activity = "reading data from TCP client";
+                            var message = await ReadStringFromNetworkPort(client);
 
-                        // Can't rely on client.Connected since TCP is stateless
-                        activity = "sending response to TCP client";
-                        await WriteStringToNetworkPort(client, response).ConfigureAwait(false);
+                            if (!string.IsNullOrWhiteSpace(message))
+                            {
+                                // Split into original arg array
+                                var args = message.Split(Options.Advanced.SeparatorControlCode, StringSplitOptions.RemoveEmptyEntries);
+
+                                // Process the switches
+                                LogTrace($"Invoking switch handler for {args.Length} switches");
+                                activity = "invoking switch handler";
+                                var response = switchHandler.Invoke(args) ?? string.Empty;
+
+                                // Can't rely on client.Connected since TCP is stateless
+                                activity = "sending response to TCP client";
+                                await WriteStringToNetworkPort(client, response).ConfigureAwait(false);
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            Log(LogLevel.Warning, $"{ex.GetType().Name} trapped {activity}");
+                        }
+                        finally
+                        {
+                            // Close is handled by Dispose
+                            client.Dispose();
+                        }
                     }
+                }
+                catch (OperationCanceledException)
+                {
+                    Log(LogLevel.Trace, "Switch server TCP listener caught OperationCanceledException");
+                    return;
                 }
                 catch (Exception ex)
                 {
-                    Log(LogLevel.Warning, $"{ex.GetType().Name} trapped {activity}");
+                    if (await TryRestartListener("TCP", ex, tracker, cancellationToken).ConfigureAwait(false)) continue;
+                    if (cancellationToken.IsCancellationRequested) return;
+
+                    // StartServer decides whether this terminates the process or is re-thrown
+                    LogException(ex);
+                    reportTerminalFailure.Invoke(ex);
+                    return;
                 }
                 finally
                 {
-                    // Close is handled by Dispose
-                    client.Dispose();
+                    server?.Stop();
                 }
-            }
-        }
-        catch (OperationCanceledException)
-        {
-            Log(LogLevel.Trace, "Switch server TCP listener caught OperationCanceledException");
-        }
-        catch (Exception ex)
-        {
-            LogException(ex);
-
-            if (!cancellationToken.IsCancellationRequested && Options.Advanced.AutoRestartServer)
-            {
-                Log(LogLevel.Warning, "Restarting switch server TCP task");
-                _ = Task.Run(() => StartTCPServer(switchHandler, cancellationToken, port), cancellationToken);
-            }
-            else
-            {
-                Log(LogLevel.Critical, $"Switch server forcibly terminating process in {nameof(StartTCPServer)}");
-                Environment.Exit(-1);
             }
         }
         finally
         {
-            server?.Stop();
             LogTrace("Switch server has stopped listening on TCP");
         }
+    }
+
+    /// <summary>
+    /// Returns true if the caller should re-establish the listener. A false return means the failure is
+    /// terminal, unless the cancellation token indicates the server is shutting down.
+    /// </summary>
+    private static async Task<bool> TryRestartListener(string listener, Exception ex, RestartTracker tracker, CancellationToken cancellationToken)
+    {
+        if (cancellationToken.IsCancellationRequested) return false;
+
+        // Auto-restart does not apply until the listener has been established at least once
+        if (!tracker.Established || !Options.Advanced.AutoRestartServer) return false;
+
+        tracker.Restarts++;
+        if (Options.Advanced.AutoRestartAttempts > 0 && tracker.Restarts > Options.Advanced.AutoRestartAttempts)
+        {
+            Log(LogLevel.Warning, $"Switch server {listener} listener failed after {Options.Advanced.AutoRestartAttempts} restart attempts");
+            return false;
+        }
+
+        LogException(ex);
+        Log(LogLevel.Warning, $"Restarting switch server {listener} listener in {Options.Advanced.AutoRestartDelay}ms (attempt {tracker.Restarts})");
+
+        try
+        {
+            await Task.Delay(Options.Advanced.AutoRestartDelay, cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            return false;
+        }
+
+        return true;
     }
 
     private static async Task<bool> TryConnectLocalNamedPipe()
@@ -653,6 +744,23 @@ public static class CommandLineSwitchServer
     private static void LogTrace(string message)
     {
         Log(LogLevel.Trace, message);
+    }
+
+    /// <summary>
+    /// Auto-restart state. The named pipe server and the optional TCP listener track this independently.
+    /// </summary>
+    private sealed class RestartTracker
+    {
+        /// <summary>
+        /// True once the listener has been established at least once. Auto-restart does not apply
+        /// until the initial attempt succeeds.
+        /// </summary>
+        public bool Established = false;
+
+        /// <summary>
+        /// Restart attempts, reset whenever the listener accepts a connection.
+        /// </summary>
+        public int Restarts = 0;
     }
 
     private static void LogException(Exception ex)
